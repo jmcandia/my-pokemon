@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mypokemon.ui.theme.PokemonTypeColors
 
+/** Etiqueta redondeada con el tipo en español y su color característico. */
 @Composable
 fun PokemonTypePill(
     type: String,
@@ -34,6 +35,7 @@ fun PokemonTypePill(
     )
 }
 
+// Traduce el nombre en inglés de PokéAPI. Un tipo desconocido se muestra capitalizado.
 private fun translatePokemonType(type: String): String {
     return when (type.lowercase()) {
         "normal" -> "Normal"
@@ -58,6 +60,7 @@ private fun translatePokemonType(type: String): String {
     }
 }
 
+// Color de cada tipo (ver `PokemonTypeColors`). Un tipo desconocido se muestra en gris.
 private fun getPokemonTypeColor(type: String): Color {
     return when (type.lowercase()) {
         "normal" -> PokemonTypeColors.Normal

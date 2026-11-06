@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.mypokemon.model.Types
 
+/** Muestra número, nombre, tipos, peso y altura del Pokémon. */
 @Composable
 fun PokemonDetails(
     pokemonId: Int?,
@@ -46,6 +47,7 @@ fun PokemonDetails(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // PokéAPI usa hectogramos y decímetros: se divide por 10 para kg y m.
             Text(text = "Peso: ${weight?.div(10.0)} kg")
             Text(text = "Altura: ${height?.div(10.0)} m")
         }

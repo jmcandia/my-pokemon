@@ -22,8 +22,9 @@ import com.example.mypokemon.model.Type
 import com.example.mypokemon.model.Types
 
 /**
- * Shared layout for every screen size: renders the loading/error states and the
- * random-search button. Each screen only supplies how a loaded Pokémon is laid out.
+ * Layout común a todos los tamaños de pantalla: muestra los estados de carga y
+ * error, y el botón de búsqueda aleatoria. Cada pantalla solo aporta, en
+ * `successContent`, cómo se distribuye un Pokémon ya cargado.
  */
 @Composable
 fun PokemonStateLayout(
@@ -60,13 +61,14 @@ fun PokemonStateLayout(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // Evento hacia arriba: la pantalla no sabe qué hace el clic, solo lo notifica.
         Button(onClick = onRandomClick) {
             Text(text = "¡Buscar Pokémon aleatorio!")
         }
     }
 }
 
-/** Fixed data so screen previews render without network. */
+/** Datos fijos para que los previews se vean sin conexión a la red. */
 internal val previewPokemon = Pokemon(
     id = 25,
     name = "pikachu",

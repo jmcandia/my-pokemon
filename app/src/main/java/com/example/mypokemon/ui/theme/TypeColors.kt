@@ -2,6 +2,7 @@ package com.example.mypokemon.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+/** Color oficial de cada tipo de Pokémon, usado por `PokemonTypePill`. */
 object PokemonTypeColors {
     val Normal = Color(0xFFA8A77A)
     val Fire = Color(0xFFEE8130)

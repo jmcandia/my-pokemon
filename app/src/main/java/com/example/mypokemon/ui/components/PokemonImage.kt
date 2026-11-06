@@ -15,6 +15,10 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import com.example.mypokemon.R
 
+/**
+ * Descarga y muestra el sprite con Coil. Mientras carga muestra un spinner; si la
+ * URL es `null` o falla la descarga, muestra el logo de la app.
+ */
 @Composable
 fun PokemonImage(
     url: String?,

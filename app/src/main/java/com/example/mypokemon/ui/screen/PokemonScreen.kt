@@ -23,6 +23,13 @@ import com.example.mypokemon.R
 import com.example.mypokemon.ui.utils.getWindowSizeClass
 import com.example.mypokemon.viewmodel.PokemonViewModel
 
+/**
+ * Pantalla principal. Es el único composable que conoce el ViewModel: lee su estado
+ * y se lo pasa a las pantallas, junto con la acción para pedir otro Pokémon.
+ *
+ * `viewModel(factory = ...)` reutiliza el mismo ViewModel tras una rotación; la
+ * `Factory` le inyecta el repositorio real.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PokemonScreen(
@@ -51,6 +58,7 @@ fun PokemonScreen(
         },
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
+        // Elige el layout según el ancho de la ventana (teléfono, plegable o tablet).
         val windowSizeClass = getWindowSizeClass()
         when (windowSizeClass.widthSizeClass) {
             WindowWidthSizeClass.Compact -> {

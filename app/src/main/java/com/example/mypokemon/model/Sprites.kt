@@ -2,6 +2,11 @@ package com.example.mypokemon.model
 
 import com.google.gson.annotations.SerializedName
 
+/**
+ * URLs de las imágenes del Pokémon. El JSON usa snake_case (`front_default`) y
+ * `@SerializedName` lo mapea a camelCase (`frontDefault`). La app solo muestra
+ * `frontDefault`.
+ */
 data class Sprites(
     @SerializedName("back_shiny")
     val backShiny: String? = null,

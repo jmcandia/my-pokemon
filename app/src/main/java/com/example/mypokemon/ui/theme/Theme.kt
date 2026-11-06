@@ -33,10 +33,14 @@ private val LightColorScheme = lightColorScheme(
     */
 )
 
+/**
+ * Tema de la app. En Android 12+ usa los colores dinámicos del fondo de pantalla;
+ * en Android 11 usa las paletas fijas `LightColorScheme` / `DarkColorScheme`.
+ */
 @Composable
 fun MyPokémonTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
+    // Los colores dinámicos están disponibles en Android 12+ (API 31)
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {

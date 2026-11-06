@@ -6,6 +6,10 @@ import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 
+/**
+ * Calcula la clase de tamaño de ventana (Compact, Medium o Expanded) de la Activity
+ * actual. Necesita una Activity real, por eso no funciona en los previews.
+ */
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun getWindowSizeClass(): WindowSizeClass{

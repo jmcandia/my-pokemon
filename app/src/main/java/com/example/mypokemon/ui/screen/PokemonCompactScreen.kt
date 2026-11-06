@@ -10,6 +10,10 @@ import com.example.mypokemon.model.PokemonUiState
 import com.example.mypokemon.ui.components.PokemonDetails
 import com.example.mypokemon.ui.components.PokemonImage
 
+/**
+ * Layout para pantallas estrechas (teléfono en vertical): imagen arriba y detalles
+ * debajo. No conoce el ViewModel: recibe el estado y la acción como parámetros.
+ */
 @Composable
 fun PokemonCompactScreen(
     uiState: PokemonUiState,
@@ -39,6 +43,7 @@ fun PokemonCompactScreen(
     }
 }
 
+// Preview con datos fijos: no necesita red ni ViewModel.
 @Preview(showBackground = true)
 @Composable
 fun PokemonCompactScreenPreview() {
