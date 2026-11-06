@@ -17,7 +17,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.mypokemon.R
@@ -27,7 +26,7 @@ import com.example.mypokemon.viewmodel.PokemonViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PokemonScreen(
-    viewModel: PokemonViewModel = viewModel()
+    viewModel: PokemonViewModel = viewModel(factory = PokemonViewModel.Factory)
 ) {
     Scaffold(
         topBar = {
@@ -56,24 +55,20 @@ fun PokemonScreen(
         when (windowSizeClass.widthSizeClass) {
             WindowWidthSizeClass.Compact -> {
                 PokemonCompactScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    viewModel = viewModel
+                    uiState = viewModel.uiState,
+                    onRandomClick = viewModel::getRandomPokemon,
+                    modifier = Modifier.padding(innerPadding)
                 )
             }
 
             WindowWidthSizeClass.Medium,
             WindowWidthSizeClass.Expanded -> {
                 PokemonMediumScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    viewModel = viewModel
+                    uiState = viewModel.uiState,
+                    onRandomClick = viewModel::getRandomPokemon,
+                    modifier = Modifier.padding(innerPadding)
                 )
             }
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PokemonScreenPreview() {
-    PokemonScreen()
 }
