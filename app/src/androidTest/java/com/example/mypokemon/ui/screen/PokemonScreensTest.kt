@@ -5,6 +5,8 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -16,6 +18,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -93,13 +96,17 @@ class PokemonScreensTest {
     fun muestra_grito_habilidades_y_estadisticas() {
         showCompact(PokemonUiState.Success(pikachu))
 
+        // `performScrollTo()` antes de comprobar que se ve: si la ventana es baja
+        // (horizontal o con el teclado abierto), estos elementos quedan bajo el borde
+        // y solo se ven tras hacer scroll, igual que para el usuario.
         composeRule.onNodeWithText(context.getString(R.string.play_cry), substring = true)
+            .performScrollTo()
             .assertIsDisplayed()
         val abilities = context.getString(
             R.string.abilities_label,
             context.getString(R.string.ability_hidden, "Lightning rod")
         )
-        composeRule.onNodeWithText(abilities).assertIsDisplayed()
+        composeRule.onNodeWithText(abilities).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.stats_title)).assertExists()
         // La fila de la estadística se lee entera: nombre y valor juntos.
         composeRule.onNode(
@@ -140,13 +147,16 @@ class PokemonScreensTest {
     fun exito_muestra_titulo_tipo_peso_y_boton_activo() {
         showCompact(PokemonUiState.Success(pikachu))
 
-        composeRule.onNodeWithText(title).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.type_electric)).assertIsDisplayed()
+        // Con scroll previo, por si la ventana es baja (ver el test del grito).
+        composeRule.onNodeWithText(title).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.type_electric))
+            .performScrollTo()
+            .assertIsDisplayed()
         val weight = context.getString(
             R.string.pokemon_weight,
             context.getString(R.string.weight_value, 6.0)
         )
-        composeRule.onNodeWithText(weight).assertIsDisplayed()
+        composeRule.onNodeWithText(weight).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(buttonText).assertIsEnabled()
     }
 
@@ -212,5 +222,8 @@ class PokemonScreensTest {
 
         composeRule.onNodeWithText(title).assertIsDisplayed()
         composeRule.onNodeWithText(buttonText).assertIsDisplayed()
+        // Las estadísticas siguen apareciendo, aunque fuera de la fila.
+        composeRule.onAllNodesWithText(context.getString(R.string.stats_title))
+            .assertCountEquals(1)
     }
 }

@@ -39,6 +39,16 @@ class PokemonUiTest {
     }
 
     @Test
+    fun `los nombres con guiones se muestran con espacios y mayúsculas`() {
+        assertEquals("Mr Mime", formatName("mr-mime"))
+        assertEquals("Toxtricity Amped", formatName("toxtricity-amped"))
+        assertEquals(
+            UiText.Resource(R.string.pokemon_title, listOf(122, "Mr Mime")),
+            formatTitle(122, "mr-mime")
+        )
+    }
+
+    @Test
     fun `título sin número muestra solo el nombre`() {
         assertEquals(UiText.Plain("Pikachu"), formatTitle(null, "pikachu"))
     }

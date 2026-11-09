@@ -110,9 +110,19 @@ internal fun abilityUi(name: String, isHidden: Boolean): UiText {
     }
 }
 
+/**
+ * Nombre legible de un Pokémon. PokéAPI une las palabras y las formas con guiones
+ * (`mr-mime`, `toxtricity-amped`): se cambian por espacios y cada palabra empieza en
+ * mayúscula ("Mr Mime", "Toxtricity Amped").
+ */
+internal fun formatName(name: String): String =
+    name.split('-')
+        .filter { it.isNotEmpty() }
+        .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+
 /** Título "#25 - Pikachu". Maneja la falta de número, de nombre o de ambos. */
 internal fun formatTitle(pokemonId: Int?, name: String?): UiText {
-    val displayName = name?.replaceFirstChar { it.uppercase() }
+    val displayName = name?.let(::formatName)
     return when {
         pokemonId != null && displayName != null ->
             UiText.Resource(R.string.pokemon_title, listOf(pokemonId, displayName))

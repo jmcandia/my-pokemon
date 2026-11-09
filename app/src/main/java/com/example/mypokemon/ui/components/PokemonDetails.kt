@@ -23,7 +23,12 @@ import com.example.mypokemon.viewmodel.PokemonUi
  * formateados desde el ViewModel (`PokemonUi`): aquí solo se distribuyen.
  */
 @Composable
-fun PokemonDetails(pokemon: PokemonUi) {
+fun PokemonDetails(
+    pokemon: PokemonUi,
+    // La pantalla mediana pone las estadísticas fuera, debajo de la fila; las demás
+    // las muestran aquí, al final de los detalles.
+    showStats: Boolean = true
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -64,6 +69,8 @@ fun PokemonDetails(pokemon: PokemonUi) {
             Text(text = stringResource(R.string.abilities_label, abilities))
         }
 
-        PokemonStats(stats = pokemon.stats, modifier = Modifier.padding(top = 8.dp))
+        if (showStats) {
+            PokemonStats(stats = pokemon.stats, modifier = Modifier.padding(top = 8.dp))
+        }
     }
 }

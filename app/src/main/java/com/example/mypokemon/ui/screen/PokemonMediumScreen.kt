@@ -11,6 +11,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mypokemon.ui.components.PokemonDetails
 import com.example.mypokemon.ui.components.PokemonImage
+import com.example.mypokemon.ui.components.PokemonStats
 import com.example.mypokemon.ui.utils.asString
 import com.example.mypokemon.viewmodel.PokemonUiState
 
@@ -35,7 +36,10 @@ fun PokemonMediumScreen(
     ) { pokemon ->
         // Detalles a la izquierda e imagen a la derecha. Sin pesos, la fila ocupa
         // solo lo que mide su contenido y `CenterHorizontally` centra el grupo en la
-        // pantalla, con 48 dp de separación entre ambos.
+        // pantalla, con 48 dp de separación entre ambos. Las estadísticas van debajo
+        // de la fila: dentro de los detalles, la columna sería mucho más alta que la
+        // imagen, y la imagen (centrada en vertical) quedaría abajo, fuera de la
+        // primera vista en un teléfono en horizontal.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -43,7 +47,7 @@ fun PokemonMediumScreen(
             horizontalArrangement = Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PokemonDetails(pokemon = pokemon)
+            PokemonDetails(pokemon = pokemon, showStats = false)
 
             PokemonImage(
                 url = pokemon.imageUrl,
@@ -51,6 +55,8 @@ fun PokemonMediumScreen(
                 size = 200.dp
             )
         }
+
+        PokemonStats(stats = pokemon.stats, modifier = Modifier.padding(top = 16.dp))
     }
 }
 

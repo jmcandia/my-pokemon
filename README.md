@@ -478,7 +478,7 @@ data class PokemonStatUi(val label: UiText, val value: Int, val fraction: Float)
 
 - `formatTenths` divide por 10 (PokéAPI usa hectogramos y decímetros) y devuelve el recurso `%1$.1f kg` con ese número. Si falta un dato devuelve `—`.
 - **¿Por qué `UiText` y no un `String` ya formateado?** El separador decimal depende del idioma (`6,0 kg` en español, `6.0 kg` en inglés). Android lo aplica al resolver el recurso en la View, con el idioma vigente. Si el ViewModel guardara el texto ya formateado, sobreviviría a un cambio de idioma con el separador antiguo.
-- `formatTitle` maneja la falta de número o de nombre.
+- `formatTitle` maneja la falta de número o de nombre. El nombre pasa por `formatName`: PokéAPI une palabras y formas con guiones (`mr-mime`, `toxtricity-amped`), que se muestran como "Mr Mime" y "Toxtricity Amped".
 - `typeUi` traduce el tipo con su recurso (`R.string.type_electric`). Un tipo desconocido queda capitalizado. `key` es el nombre en inglés; la View lo usa para elegir el color.
 - `statUi` traduce la estadística (`R.string.stat_attack`) y calcula `fraction = valor / 255`, la estadística base más alta que existe, así las barras son comparables entre Pokémon. Una estadística sin valor se omite.
 - `abilityUi` convierte el identificador en texto (`lightning-rod` → "Lightning rod") y marca las ocultas con "(oculta)". Las habilidades quedan en inglés: PokéAPI solo da su traducción en `/ability/{id}`, que sería una petición más por habilidad.
@@ -621,7 +621,7 @@ PokemonStateLayout(uiState, onRandomClick, onSearch, modifier) { pokemon ->
 ```
 
 - **`PokemonCompactScreen`**: columna con la imagen arriba y los detalles abajo.
-- **`PokemonMediumScreen`**: fila con los detalles a la izquierda y la imagen a la derecha. La fila no usa pesos: `Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally)` separa los dos elementos y centra el grupo en la pantalla.
+- **`PokemonMediumScreen`**: fila con los detalles a la izquierda y la imagen a la derecha, y las estadísticas debajo de la fila. La fila no usa pesos: `Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally)` separa los dos elementos y centra el grupo en la pantalla. Las estadísticas quedan fuera (`PokemonDetails(showStats = false)`) porque la imagen se centra en vertical respecto a los detalles: con ellas dentro, la columna sería mucho más alta que la imagen, y la imagen quedaría abajo, cortada en un teléfono en horizontal.
 
 **Componentes (`ui/components/`)**:
 
