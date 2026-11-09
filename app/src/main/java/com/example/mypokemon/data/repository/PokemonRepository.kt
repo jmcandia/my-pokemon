@@ -1,30 +1,21 @@
 package com.example.mypokemon.data.repository
 
-import com.example.mypokemon.data.remote.ApiService
 import com.example.mypokemon.model.Pokemon
-import retrofit2.HttpException
 
 /**
  * Fuente de datos de Pokémon para el ViewModel.
  *
- * Recibe `ApiService` por constructor (inyección de dependencias). En la app se le
- * pasa `RetrofitInstance.api`; en un test se le puede pasar una API falsa.
+ * Es una interfaz: el ViewModel depende de este contrato y no de una implementación
+ * concreta. En la app se usa `DefaultPokemonRepository`; en los tests, un
+ * repositorio falso.
  */
-class PokemonRepository(
-    private val api: ApiService
-) {
+interface PokemonRepository {
 
     /**
      * Devuelve el Pokémon pedido.
      *
-     * Si el servidor responde con error (404, 500…) o sin cuerpo, lanza
-     * `HttpException`, que conserva el código HTTP. Los errores de red (sin
-     * conexión, timeout) llegan como `IOException`. Ninguno se captura aquí: los
-     * maneja el ViewModel.
+     * Si falla, lanza una `PokemonException` (`Network`, `Server` o `Unknown`).
+     * Nunca lanza excepciones de Retrofit, OkHttp o Gson.
      */
-    suspend fun getPokemon(idOrName: String): Pokemon {
-        val response = api.getPokemon(idOrName)
-        return response.body()?.takeIf { response.isSuccessful }
-            ?: throw HttpException(response)
-    }
+    suspend fun getPokemon(idOrName: String): Pokemon
 }

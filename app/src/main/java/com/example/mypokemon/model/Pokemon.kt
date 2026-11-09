@@ -26,4 +26,11 @@ data class Pokemon(
     val sprites: Sprites? = Sprites(),
     @SerializedName("types")
     val types: ArrayList<Types> = arrayListOf()
-)
+) {
+    /**
+     * URL de la imagen a mostrar: la ilustración oficial si existe y, si no, el
+     * sprite pixel art. Es una propiedad calculada (sin campo), así que Gson la ignora.
+     */
+    val imageUrl: String?
+        get() = sprites?.other?.officialArtwork?.frontDefault ?: sprites?.frontDefault
+}

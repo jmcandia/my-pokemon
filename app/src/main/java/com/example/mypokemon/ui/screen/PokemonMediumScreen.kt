@@ -9,9 +9,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.mypokemon.model.PokemonUiState
 import com.example.mypokemon.ui.components.PokemonDetails
 import com.example.mypokemon.ui.components.PokemonImage
+import com.example.mypokemon.ui.utils.asString
+import com.example.mypokemon.viewmodel.PokemonUiState
 
 /**
  * Layout para pantallas medianas y anchas (tablet, plegable, teléfono en horizontal):
@@ -40,17 +41,11 @@ fun PokemonMediumScreen(
             horizontalArrangement = Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PokemonDetails(
-                pokemonId = pokemon.id,
-                name = pokemon.name,
-                types = pokemon.types,
-                weight = pokemon.weight,
-                height = pokemon.height
-            )
+            PokemonDetails(pokemon = pokemon)
 
             PokemonImage(
-                url = pokemon.sprites?.frontDefault,
-                name = pokemon.name,
+                url = pokemon.imageUrl,
+                name = pokemon.title.asString(),
                 size = 200.dp
             )
         }

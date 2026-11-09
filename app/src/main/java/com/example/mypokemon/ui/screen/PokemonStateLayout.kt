@@ -14,12 +14,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.mypokemon.R
 import com.example.mypokemon.model.Pokemon
-import com.example.mypokemon.model.PokemonUiState
 import com.example.mypokemon.model.Sprites
 import com.example.mypokemon.model.Type
 import com.example.mypokemon.model.Types
+import com.example.mypokemon.ui.utils.asString
+import com.example.mypokemon.viewmodel.PokemonUi
+import com.example.mypokemon.viewmodel.PokemonUiState
+import com.example.mypokemon.viewmodel.toUi
 
 /**
  * Layout común a todos los tamaños de pantalla: muestra los estados de carga y
@@ -31,7 +36,7 @@ fun PokemonStateLayout(
     uiState: PokemonUiState,
     onRandomClick: () -> Unit,
     modifier: Modifier = Modifier,
-    successContent: @Composable (Pokemon) -> Unit
+    successContent: @Composable (PokemonUi) -> Unit
 ) {
     Column(
         modifier = modifier.fillMaxSize(),
@@ -49,7 +54,7 @@ fun PokemonStateLayout(
 
             is PokemonUiState.Error -> {
                 Text(
-                    text = uiState.message,
+                    text = uiState.message.asString(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp, 5.dp),
@@ -62,13 +67,20 @@ fun PokemonStateLayout(
         Spacer(modifier = Modifier.height(32.dp))
 
         // Evento hacia arriba: la pantalla no sabe qué hace el clic, solo lo notifica.
-        Button(onClick = onRandomClick) {
-            Text(text = "¡Buscar Pokémon aleatorio!")
+        // Se desactiva mientras carga para no lanzar varias peticiones a la vez.
+        Button(
+            onClick = onRandomClick,
+            enabled = uiState !is PokemonUiState.Loading
+        ) {
+            Text(text = stringResource(R.string.random_button))
         }
     }
 }
 
-/** Datos fijos para que los previews se vean sin conexión a la red. */
+/**
+ * Datos fijos para que los previews se vean sin conexión a la red. Pasan por
+ * `toUi()`, igual que los datos reales en el ViewModel.
+ */
 internal val previewPokemon = Pokemon(
     id = 25,
     name = "pikachu",
@@ -76,4 +88,4 @@ internal val previewPokemon = Pokemon(
     weight = 60,
     sprites = Sprites(frontDefault = null),
     types = arrayListOf(Types(slot = 1, type = Type(name = "electric")))
-)
+).toUi()

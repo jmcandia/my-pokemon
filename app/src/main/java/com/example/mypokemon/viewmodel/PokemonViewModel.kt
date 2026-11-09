@@ -1,20 +1,21 @@
 package com.example.mypokemon.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.mypokemon.data.remote.RetrofitInstance
+import com.example.mypokemon.PokemonApplication
+import com.example.mypokemon.R
+import com.example.mypokemon.data.repository.PokemonException
 import com.example.mypokemon.data.repository.PokemonRepository
-import com.example.mypokemon.model.PokemonUiState
-import kotlinx.coroutines.CancellationException
+import com.example.mypokemon.ui.utils.UiText
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import retrofit2.HttpException
-import java.io.IOException
 import kotlin.random.Random
 
 /**
@@ -25,51 +26,64 @@ import kotlin.random.Random
 class PokemonViewModel(
     private val repository: PokemonRepository
 ) : ViewModel() {
-    // Estado observable por Compose: cuando cambia, la UI se recompone sola.
-    // `private set` impide que la UI lo modifique; solo el ViewModel lo cambia.
-    var uiState: PokemonUiState by mutableStateOf(PokemonUiState.Loading)
-        private set
+    // Estado mutable, privado: solo el ViewModel lo cambia.
+    private val _uiState = MutableStateFlow<PokemonUiState>(PokemonUiState.Loading)
+
+    // Estado de solo lectura que observa la UI con `collectAsStateWithLifecycle()`.
+    // Al ser un `StateFlow`, el ViewModel no depende de Compose y se testea leyendo `.value`.
+    val uiState: StateFlow<PokemonUiState> = _uiState.asStateFlow()
+
+    // Petición en curso, para no lanzar otra mientras no termine.
+    private var loadJob: Job? = null
 
     init {
         // Carga un primer Pokémon al crear el ViewModel.
         getRandomPokemon()
     }
 
-    /** Pide un Pokémon con ID aleatorio y actualiza `uiState` con el resultado. */
+    /**
+     * Pide un Pokémon con ID aleatorio y actualiza `uiState` con el resultado.
+     *
+     * Si ya hay una petición en curso, no hace nada. La UI también desactiva el botón
+     * mientras carga; esta comprobación evita peticiones simultáneas aunque se llame
+     * desde otro sitio.
+     */
     fun getRandomPokemon() {
+        if (loadJob?.isActive == true) return
+
         // `viewModelScope` cancela la corrutina si el ViewModel se destruye.
-        viewModelScope.launch {
-            uiState = PokemonUiState.Loading
-            try {
+        loadJob = viewModelScope.launch {
+            _uiState.value = PokemonUiState.Loading
+            _uiState.value = try {
                 // PokéAPI tiene Pokémon del 1 al 1025 (`nextInt` excluye el límite superior).
                 val randomId = Random.nextInt(1, 1026).toString()
-                uiState = PokemonUiState.Success(repository.getPokemon(randomId))
-            } catch (e: CancellationException) {
-                // La corrutina se canceló (el ViewModel se destruye): hay que relanzar
-                // la excepción para que la cancelación se propague.
-                throw e
-            } catch (e: IOException) {
-                // Sin conexión, timeout o fallo de DNS.
-                uiState = PokemonUiState.Error("Sin conexión. Revisa tu red e inténtalo de nuevo.")
-            } catch (e: HttpException) {
-                // El servidor respondió con error (404, 500…) o sin cuerpo.
-                uiState = PokemonUiState.Error("El servidor respondió con error (${e.code()}).")
-            } catch (e: Exception) {
-                // Cualquier otro fallo, por ejemplo un JSON que Gson no puede leer.
-                uiState = PokemonUiState.Error("Respuesta inesperada del servidor.")
+                // Convierte el DTO de red en un modelo listo para mostrar.
+                PokemonUiState.Success(repository.getPokemon(randomId).toUi())
+            } catch (e: PokemonException) {
+                // El repositorio solo lanza `PokemonException`. La cancelación de la
+                // corrutina (`CancellationException`) no entra aquí y se propaga sola.
+                PokemonUiState.Error(e.toMessage())
             }
         }
     }
 
+    // Elige el mensaje de cada tipo de error. El texto está en `strings.xml`.
+    private fun PokemonException.toMessage(): UiText = when (this) {
+        is PokemonException.Network -> UiText.Resource(R.string.error_network)
+        is PokemonException.Server -> UiText.Resource(R.string.error_server, listOf(code))
+        is PokemonException.Unknown -> UiText.Resource(R.string.error_unknown)
+    }
+
     companion object {
         /**
-         * Crea el ViewModel con las dependencias reales (Retrofit). Se usa con
+         * Crea el ViewModel con el repositorio del `AppContainer` de la app. Se usa con
          * `viewModel(factory = PokemonViewModel.Factory)`. En los tests se construye
          * el ViewModel directamente, con un repositorio falso.
          */
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                PokemonViewModel(PokemonRepository(RetrofitInstance.api))
+                val application = this[APPLICATION_KEY] as PokemonApplication
+                PokemonViewModel(application.container.pokemonRepository)
             }
         }
     }

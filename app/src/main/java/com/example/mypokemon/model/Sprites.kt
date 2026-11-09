@@ -4,8 +4,10 @@ import com.google.gson.annotations.SerializedName
 
 /**
  * URLs de las imágenes del Pokémon. El JSON usa snake_case (`front_default`) y
- * `@SerializedName` lo mapea a camelCase (`frontDefault`). La app solo muestra
- * `frontDefault`.
+ * `@SerializedName` lo mapea a camelCase (`frontDefault`).
+ *
+ * `frontDefault` es un sprite pixel art de 96 px. La app prefiere la ilustración
+ * oficial de `other`, de mayor resolución (ver `Pokemon.imageUrl`).
  */
 data class Sprites(
     @SerializedName("back_shiny")
@@ -23,5 +25,7 @@ data class Sprites(
     @SerializedName("back_shiny_female")
     val backShinyFemale: String? = null,
     @SerializedName("front_shiny_female")
-    val frontShinyFemale: String? = null
+    val frontShinyFemale: String? = null,
+    @SerializedName("other")
+    val other: OtherSprites? = null
 )

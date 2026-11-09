@@ -1,4 +1,6 @@
-package com.example.mypokemon.model
+package com.example.mypokemon.viewmodel
+
+import com.example.mypokemon.ui.utils.UiText
 
 /**
  * Estados posibles de la pantalla. Al ser `sealed`, el `when` de la UI debe cubrir
@@ -7,8 +9,8 @@ package com.example.mypokemon.model
 sealed class PokemonUiState {
     // Petición en curso.
     object Loading : PokemonUiState()
-    // Petición correcta: contiene el Pokémon a mostrar.
-    data class Success(val pokemon: Pokemon) : PokemonUiState()
+    // Petición correcta: contiene el Pokémon listo para mostrar.
+    data class Success(val pokemon: PokemonUi) : PokemonUiState()
     // Petición fallida: contiene el mensaje que se muestra al usuario.
-    data class Error(val message: String) : PokemonUiState()
+    data class Error(val message: UiText) : PokemonUiState()
 }

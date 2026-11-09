@@ -16,15 +16,15 @@ Este documento explica cómo ejecutar el proyecto y cómo replicarlo desde cero,
 4. [Replicar el proyecto paso a paso](#replicar-el-proyecto-paso-a-paso)
    - [Paso 1. Crear el proyecto](#paso-1-crear-el-proyecto)
    - [Paso 2. Añadir las dependencias](#paso-2-añadir-las-dependencias)
-   - [Paso 3. Permiso de Internet](#paso-3-permiso-de-internet)
+   - [Paso 3. Manifest: permiso de Internet y Application](#paso-3-manifest-permiso-de-internet-y-application)
    - [Paso 4. Modelos de datos (Gson)](#paso-4-modelos-de-datos-gson)
    - [Paso 5. Retrofit: la capa de red](#paso-5-retrofit-la-capa-de-red)
    - [Paso 6. Repositorio](#paso-6-repositorio)
    - [Paso 7. Estado de la UI](#paso-7-estado-de-la-ui)
    - [Paso 8. ViewModel](#paso-8-viewmodel)
    - [Paso 9. Interfaz con Compose](#paso-9-interfaz-con-compose)
-   - [Paso 10. MainActivity](#paso-10-mainactivity)
-5. [Testear con una API falsa](#testear-con-una-api-falsa)
+   - [Paso 10. Application y MainActivity](#paso-10-application-y-mainactivity)
+5. [Testear con piezas falsas](#testear-con-piezas-falsas)
 6. [Comandos útiles](#comandos-útiles)
 
 ---
@@ -57,36 +57,48 @@ El proyecto sigue **MVVM** (Model–View–ViewModel), con capas simples y sin f
 └──────────────▲───────────────────────────────────┬───────────────┘
                │ uiState (estado)                  │ onRandomClick (evento)
 ┌──────────────┴───────────────────────────────────▼───────────────┐
-│ ViewModel: PokemonViewModel                                      │
+│ ViewModel: PokemonViewModel  (Pokemon ──toUi()──► PokemonUi)     │
 └──────────────────────────────────┬───────────────────────────────┘
-                                   │ getPokemon(id)
+                                   │ getPokemon(id) / PokemonException
 ┌──────────────────────────────────▼───────────────────────────────┐
-│ Model: PokemonRepository ──► ApiService (Retrofit) ──► PokéAPI   │
+│ Model: PokemonRepository (interfaz)                              │
+│          └─ DefaultPokemonRepository ──► ApiService ──► PokéAPI  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 - El **estado baja** (`uiState`) y los **eventos suben** (`onRandomClick`). Es un flujo unidireccional.
 - Solo `PokemonScreen` conoce el ViewModel. El resto de composables reciben datos y lambdas, así que se pueden previsualizar sin red.
-- Las dependencias se pasan **por constructor**: `ApiService` → `PokemonRepository` → `PokemonViewModel`. Eso permite testear cada capa con piezas falsas.
+- **Cada capa solo conoce a la de abajo, y por su contrato.** La View recibe un `PokemonUi` ya formateado, no el DTO de Gson. El ViewModel depende de la interfaz `PokemonRepository` y solo ve `PokemonException`, nunca Retrofit. Los textos están en `strings.xml`: el ViewModel entrega un `UiText` (ID de recurso + argumentos) y la View lo resuelve.
+- Las dependencias se pasan **por constructor** y se crean en un solo sitio, el `AppContainer`, que vive en `PokemonApplication`. Eso permite testear cada capa con piezas falsas.
 
 Estructura de carpetas (`app/src/main/java/com/example/mypokemon/`):
 
 ```
 MainActivity.kt                 Punto de entrada: tema + PokemonScreen
+PokemonApplication.kt           Crea el AppContainer al arrancar la app
 data/
+  AppContainer.kt               Contenedor de dependencias (inyección manual)
   remote/ApiService.kt          Interfaz Retrofit (endpoints)
   remote/RetrofitInstance.kt    Configuración de Retrofit (singleton)
-  repository/PokemonRepository.kt
+  repository/
+    PokemonRepository.kt        Contrato que usa el ViewModel
+    DefaultPokemonRepository.kt Implementación con Retrofit
+    PokemonException.kt         Errores del repositorio: Network / Server / Unknown
 model/
-  Pokemon.kt, Sprites.kt,       Clases que Gson rellena con el JSON
+  Pokemon.kt, Sprites.kt,       DTOs: clases que Gson rellena con el JSON
+  OtherSprites.kt, OfficialArtwork.kt,
   Types.kt, Type.kt
+viewmodel/
+  PokemonViewModel.kt           Estado + lógica + Factory
   PokemonUiState.kt             Estados de pantalla: Loading / Success / Error
-viewmodel/PokemonViewModel.kt   Estado + lógica + Factory
+  PokemonUi.kt                  Modelo listo para mostrar + conversión desde el DTO
 ui/
   screen/                       Pantallas y layout común
   components/                   Imagen, detalles y etiqueta de tipo
   theme/                        Tema, colores y tipografía
   utils/Utils.kt                Clase de tamaño de ventana
+  utils/UiText.kt               Texto sin resolver (recurso + argumentos)
+res/values/strings.xml          Todos los textos de la app
 ```
 
 ---
@@ -113,6 +125,7 @@ converterGson = "3.0.0"
 coilCompose = "3.6.3"
 lifecycleRuntimeKtx = "2.11.0"
 material3WindowSizeClass = "1.4.0"
+coroutinesTest = "1.10.2"
 
 [libraries]
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
@@ -120,6 +133,8 @@ converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coilCompose" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coilCompose" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 androidx-compose-material3-window-size-class1 = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3WindowSizeClass" }
 ```
 
@@ -131,7 +146,9 @@ implementation(libs.converter.gson)                             // JSON ⇄ clas
 implementation(libs.coil.compose)                               // Carga de imágenes en Compose
 implementation(libs.coil.network.okhttp)                        // Descarga de imágenes por HTTP
 implementation(libs.androidx.lifecycle.viewmodel.compose)       // viewModel() en Compose
+implementation(libs.androidx.lifecycle.runtime.compose)         // collectAsStateWithLifecycle()
 implementation(libs.androidx.compose.material3.window.size.class1) // Layout adaptativo
+testImplementation(libs.kotlinx.coroutines.test)                // runTest y dispatchers de test
 ```
 
 | Librería | Para qué se usa |
@@ -140,14 +157,20 @@ implementation(libs.androidx.compose.material3.window.size.class1) // Layout ada
 | `converter-gson` | Le dice a Retrofit cómo convertir el JSON de la respuesta en objetos Kotlin. |
 | `coil-compose` + `coil-network-okhttp` | Descargan y muestran el sprite del Pokémon. Coil 3 necesita el módulo de red aparte. |
 | `lifecycle-viewmodel-compose` | Da la función `viewModel()` para obtener el ViewModel desde un composable. |
+| `lifecycle-runtime-compose` | Da `collectAsStateWithLifecycle()`, que convierte el `StateFlow` del ViewModel en estado de Compose. |
 | `material3-window-size-class` | Calcula si la pantalla es Compact, Medium o Expanded. |
+| `kotlinx-coroutines-test` (solo tests) | `runTest` y dispatchers de test para probar código con corrutinas. |
 
-### Paso 3. Permiso de Internet
+### Paso 3. Manifest: permiso de Internet y Application
 
-Sin este permiso, cualquier llamada de red falla. En `app/src/main/AndroidManifest.xml`, antes de `<application>`:
+Sin el permiso de Internet, cualquier llamada de red falla. Además, `android:name` indica a Android que use nuestra `Application` propia (se crea en el [paso 10](#paso-10-application-y-mainactivity)). En `app/src/main/AndroidManifest.xml`:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
+
+<application
+    android:name=".PokemonApplication"
+    ... >
 ```
 
 ### Paso 4. Modelos de datos (Gson)
@@ -160,7 +183,12 @@ Primero hay que ver qué devuelve la API. Esta es una versión reducida de `GET 
   "name": "pikachu",
   "height": 4,
   "weight": 60,
-  "sprites": { "front_default": "https://.../25.png", "back_default": "..." },
+  "sprites": {
+    "front_default": "https://.../pokemon/25.png",
+    "other": {
+      "official-artwork": { "front_default": "https://.../official-artwork/25.png" }
+    }
+  },
   "types": [
     { "slot": 1, "type": { "name": "electric", "url": "https://pokeapi.co/api/v2/type/13/" } }
   ]
@@ -177,9 +205,18 @@ data class Pokemon(
     @SerializedName("weight") val weight: Int? = null,   // hectogramos
     @SerializedName("sprites") val sprites: Sprites? = Sprites(),
     @SerializedName("types") val types: ArrayList<Types> = arrayListOf()
-)
+) {
+    // Ilustración oficial si existe; si no, el sprite pixel art.
+    val imageUrl: String?
+        get() = sprites?.other?.officialArtwork?.frontDefault ?: sprites?.frontDefault
+}
 
-data class Sprites(@SerializedName("front_default") val frontDefault: String? = null /* … */)
+data class Sprites(
+    @SerializedName("other") val other: OtherSprites? = null,
+    @SerializedName("front_default") val frontDefault: String? = null /* … */
+)
+data class OtherSprites(@SerializedName("official-artwork") val officialArtwork: OfficialArtwork? = null)
+data class OfficialArtwork(@SerializedName("front_default") val frontDefault: String? = null)
 data class Types(@SerializedName("slot") val slot: Int? = null, @SerializedName("type") val type: Type? = Type())
 data class Type(@SerializedName("name") val name: String? = null, @SerializedName("url") val url: String? = null)
 ```
@@ -190,6 +227,8 @@ Puntos clave:
 - **Todos los parámetros tienen valor por defecto.** Así Kotlin genera un constructor sin parámetros, Gson lo usa, y las claves que falten en el JSON conservan su valor por defecto.
 - **Los campos son nullable.** Gson no respeta la nulabilidad de Kotlin: si el JSON trae `"name": null`, asigna `null` aunque el tipo sea `String`, y la app falla después. Declararlos nullable obliga a la UI a manejar ese caso (`?.`, `?:`).
 - La estructura anidada del JSON (`types[].type.name`) se reproduce con clases anidadas (`Types` → `Type`).
+- `@SerializedName` también sirve para claves que no son nombres válidos en Kotlin, como `official-artwork` (lleva guion).
+- `imageUrl` es una propiedad calculada, sin campo propio, así que Gson la ignora. Prefiere la ilustración oficial (unos 475 px) al sprite `front_default` (96 px), que se ve borroso a 200 dp.
 
 ### Paso 5. Retrofit: la capa de red
 
@@ -229,7 +268,7 @@ Cada parte de la firma tiene un significado para Retrofit:
 | `Pokemon` | Retrofit **lanza** una `HttpException`. |
 | `Response<Pokemon>` | **No lanza**: devuelve un objeto con `isSuccessful == false` y `body() == null`. |
 
-Aquí se usa `Response<T>` para que el repositorio decida qué hacer con cada respuesta. Si no es correcta, la convierte en `HttpException` (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)). Además cubre el caso de un 200 sin cuerpo, que con `Pokemon` como retorno no se podría controlar.
+Aquí se usa `Response<T>` para que el repositorio decida qué hacer con cada respuesta. Si no es correcta, la convierte en `PokemonException.Server` con el código HTTP (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)). Además cubre el caso de un 200 sin cuerpo, que con `Pokemon` como retorno no se podría controlar.
 
 Otras anotaciones habituales, por si quieres añadir endpoints:
 
@@ -283,18 +322,18 @@ api.getPokemon("25")
 
 #### 5.4. Tipos de error y dónde se manejan
 
-El repositorio no captura nada: deja que cada error llegue al ViewModel como una excepción de un tipo distinto. El ViewModel tiene un `catch` por tipo y muestra un mensaje en español:
+Las excepciones de Retrofit, OkHttp y Gson no salen de la capa de datos. `DefaultPokemonRepository` las captura y las traduce a una `PokemonException`. El ViewModel solo conoce esos tres tipos y elige un mensaje de `strings.xml` para cada uno:
 
-| Situación | Excepción | Mensaje en pantalla |
-|---|---|---|
-| Sin conexión, timeout, DNS | `IOException` (la lanza OkHttp) | "Sin conexión. Revisa tu red e inténtalo de nuevo." |
-| El servidor responde 404, 500… o sin cuerpo | `HttpException` (la lanza `PokemonRepository`) | "El servidor respondió con error (404)." |
-| JSON con formato inesperado | `JsonSyntaxException` u otra (la lanza Gson) | "Respuesta inesperada del servidor." |
-| La corrutina se cancela | `CancellationException` | Ninguno: se relanza. |
+| Situación | Excepción original | La traduce a | Mensaje en pantalla |
+|---|---|---|---|
+| Sin conexión, timeout, DNS | `IOException` (OkHttp) | `PokemonException.Network` | "Sin conexión. Revisa tu red e inténtalo de nuevo." |
+| El servidor responde 404, 500… o sin cuerpo | Respuesta no exitosa | `PokemonException.Server(code)` | "El servidor respondió con error (404)." |
+| JSON con formato inesperado | `JsonSyntaxException` u otra (Gson) | `PokemonException.Unknown` | "Respuesta inesperada del servidor." |
+| La corrutina se cancela | `CancellationException` | Ninguna: se relanza | Ninguno. |
 
 Tres reglas que conviene respetar al replicarlo:
 
-1. **Relanzar `CancellationException`.** Cuando el ViewModel se destruye, `viewModelScope` cancela sus corrutinas lanzando esta excepción. Un `catch (e: Exception)` la atraparía y la corrutina seguiría ejecutándose. Por eso va en el primer `catch`, y se relanza.
+1. **Relanzar `CancellationException`.** Cuando el ViewModel se destruye, `viewModelScope` cancela sus corrutinas lanzando esta excepción. Un `catch (e: Exception)` la atraparía y la corrutina seguiría ejecutándose. Por eso el repositorio la captura primero y la relanza. El ViewModel solo captura `PokemonException`, así que la cancelación pasa sin tocarla.
 2. **Ordenar los `catch` de lo específico a lo general.** `catch (e: Exception)` va al final; si fuera primero, atraparía todo.
 3. **No mostrar `e.message` al usuario.** Suele estar en inglés, es técnico (`Unable to resolve host "pokeapi.co"…`) y puede ser `null`.
 
@@ -322,33 +361,99 @@ Tres reglas que conviene respetar al replicarlo:
 
 ### Paso 6. Repositorio
 
-`data/repository/PokemonRepository.kt` es el intermediario entre el ViewModel y la API. Recibe `ApiService` **por constructor**, en lugar de usar `RetrofitInstance` directamente, para poder sustituirlo por una versión falsa en los tests.
+El repositorio es el intermediario entre el ViewModel y la API. Tiene tres piezas en `data/repository/`.
+
+**El contrato, `PokemonRepository.kt`.** Es lo único que conoce el ViewModel:
 
 ```kotlin
-class PokemonRepository(
+interface PokemonRepository {
+    suspend fun getPokemon(idOrName: String): Pokemon
+}
+```
+
+**Los errores, `PokemonException.kt`.** Son los únicos que puede lanzar el repositorio:
+
+```kotlin
+sealed class PokemonException(cause: Throwable? = null) : Exception(cause) {
+    class Network(cause: Throwable) : PokemonException(cause)
+    class Server(val code: Int) : PokemonException()
+    class Unknown(cause: Throwable) : PokemonException(cause)
+}
+```
+
+**La implementación, `DefaultPokemonRepository.kt`.** Recibe `ApiService` **por constructor**, en lugar de usar `RetrofitInstance` directamente, para poder sustituirlo por una versión falsa en los tests:
+
+```kotlin
+class DefaultPokemonRepository(
     private val api: ApiService
-) {
-    suspend fun getPokemon(idOrName: String): Pokemon {
-        val response = api.getPokemon(idOrName)
+) : PokemonRepository {
+    override suspend fun getPokemon(idOrName: String): Pokemon {
+        val response = try {
+            api.getPokemon(idOrName)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            throw PokemonException.Network(e)
+        } catch (e: Exception) {
+            throw PokemonException.Unknown(e)
+        }
         return response.body()?.takeIf { response.isSuccessful }
-            ?: throw HttpException(response)
+            ?: throw PokemonException.Server(response.code())
     }
 }
 ```
 
 - Si la respuesta es correcta y tiene cuerpo, devuelve el `Pokemon`.
-- Si no, lanza `HttpException(response)`, la misma excepción que lanzaría Retrofit. Conserva el código HTTP (`e.code()`), así el ViewModel puede mostrarlo.
-- Las excepciones de red y de Gson **no** se capturan aquí. Suben al ViewModel, que decide qué mensaje mostrar.
+- Si no, lanza `PokemonException.Server` con el código HTTP, para que el ViewModel pueda mostrarlo.
+- Los errores de red y de Gson se traducen a `Network` y `Unknown`. Así el ViewModel no importa nada de Retrofit (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)).
+- **¿Por qué una interfaz?** El ViewModel depende del contrato, no de Retrofit. En sus tests se le pasa un `FakePokemonRepository`, sin red ni respuestas HTTP falsas.
 
 ### Paso 7. Estado de la UI
 
-`model/PokemonUiState.kt` define los tres estados posibles de la pantalla:
+El estado vive en `viewmodel/`, junto al ViewModel que lo produce. Tiene tres piezas.
+
+**`ui/utils/UiText.kt`: textos sin resolver.** El ViewModel no tiene `Context`, así que no puede leer `strings.xml`. En su lugar indica qué recurso usar y con qué argumentos. La View lo resuelve con `asString()`:
+
+```kotlin
+sealed interface UiText {
+    data class Plain(val value: String) : UiText
+    data class Resource(@StringRes val id: Int, val args: List<Any> = emptyList()) : UiText
+}
+
+@Composable
+fun UiText.asString(): String = when (this) {
+    is UiText.Plain -> value
+    is UiText.Resource -> stringResource(id, *args.toTypedArray())
+}
+```
+
+Todos los textos (botón, errores, título, tipos) están en `res/values/strings.xml`. Para traducir la app basta con añadir `res/values-en/strings.xml`.
+
+**`viewmodel/PokemonUi.kt`: el Pokémon listo para mostrar.** El DTO `Pokemon` tiene campos nullable y unidades de PokéAPI. `toUi()` lo convierte en un modelo que la View pinta tal cual:
+
+```kotlin
+data class PokemonUi(
+    val title: UiText,          // "#25 - Pikachu" o "Pokémon desconocido"
+    val imageUrl: String?,      // artwork oficial o, si falta, el sprite
+    val types: List<PokemonTypeUi>,
+    val weight: String,         // "6,0 kg" o "—"
+    val height: String          // "0,4 m" o "—"
+)
+
+data class PokemonTypeUi(val key: String, val label: UiText)  // "electric", "Eléctrico"
+```
+
+- `formatTenths` divide por 10 (PokéAPI usa hectogramos y decímetros) y usa el separador decimal del idioma (`6,0 kg` en español). Si falta un dato devuelve `—`.
+- `formatTitle` maneja la falta de número o de nombre.
+- `typeUi` traduce el tipo con su recurso (`R.string.type_electric`). Un tipo desconocido queda capitalizado. `key` es el nombre en inglés; la View lo usa para elegir el color.
+
+**`viewmodel/PokemonUiState.kt`: los tres estados de la pantalla.**
 
 ```kotlin
 sealed class PokemonUiState {
     object Loading : PokemonUiState()
-    data class Success(val pokemon: Pokemon) : PokemonUiState()
-    data class Error(val message: String) : PokemonUiState()
+    data class Success(val pokemon: PokemonUi) : PokemonUiState()
+    data class Error(val message: UiText) : PokemonUiState()
 }
 ```
 
@@ -362,56 +467,66 @@ Al ser `sealed`, un `when (uiState)` sin los tres casos no compila. Así ningún
 class PokemonViewModel(
     private val repository: PokemonRepository
 ) : ViewModel() {
-    var uiState: PokemonUiState by mutableStateOf(PokemonUiState.Loading)
-        private set
+    private val _uiState = MutableStateFlow<PokemonUiState>(PokemonUiState.Loading)
+    val uiState: StateFlow<PokemonUiState> = _uiState.asStateFlow()
+
+    private var loadJob: Job? = null
 
     init { getRandomPokemon() }
 
     fun getRandomPokemon() {
-        viewModelScope.launch {
-            uiState = PokemonUiState.Loading
-            try {
+        if (loadJob?.isActive == true) return
+
+        loadJob = viewModelScope.launch {
+            _uiState.value = PokemonUiState.Loading
+            _uiState.value = try {
                 val randomId = Random.nextInt(1, 1026).toString()
-                uiState = PokemonUiState.Success(repository.getPokemon(randomId))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: IOException) {
-                uiState = PokemonUiState.Error("Sin conexión. Revisa tu red e inténtalo de nuevo.")
-            } catch (e: HttpException) {
-                uiState = PokemonUiState.Error("El servidor respondió con error (${e.code()}).")
-            } catch (e: Exception) {
-                uiState = PokemonUiState.Error("Respuesta inesperada del servidor.")
+                PokemonUiState.Success(repository.getPokemon(randomId).toUi())
+            } catch (e: PokemonException) {
+                PokemonUiState.Error(e.toMessage())
             }
         }
     }
 
+    private fun PokemonException.toMessage(): UiText = when (this) {
+        is PokemonException.Network -> UiText.Resource(R.string.error_network)
+        is PokemonException.Server -> UiText.Resource(R.string.error_server, listOf(code))
+        is PokemonException.Unknown -> UiText.Resource(R.string.error_unknown)
+    }
+
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
-            initializer { PokemonViewModel(PokemonRepository(RetrofitInstance.api)) }
+            initializer {
+                val application = this[APPLICATION_KEY] as PokemonApplication
+                PokemonViewModel(application.container.pokemonRepository)
+            }
         }
     }
 }
 ```
 
-- `mutableStateOf` hace que Compose **recomponga** la UI cada vez que cambia `uiState`.
-- `private set` impide que la UI modifique el estado. Solo el ViewModel lo cambia.
-- `viewModelScope.launch` lanza una corrutina que se cancela sola si el ViewModel se destruye. Aquí se llama a la función `suspend` de Retrofit.
-- Los `catch` convierten cada tipo de error en un mensaje para el usuario (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)).
-- **`Factory`**: Android crea los ViewModel con un constructor sin parámetros. Como este recibe un repositorio, la `Factory` le indica cómo construirlo con las dependencias reales.
+- **`StateFlow`**: el estado se guarda en un `MutableStateFlow` privado y se expone como `StateFlow` de solo lectura. Así solo el ViewModel lo cambia, y el ViewModel no depende de Compose: en los tests basta con leer `uiState.value`.
+- **`loadJob`**: guarda la petición en curso. Si llega otra llamada antes de que termine, se ignora. La UI además desactiva el botón mientras carga.
+- `viewModelScope.launch` lanza una corrutina que se cancela sola si el ViewModel se destruye. Aquí se llama a la función `suspend` del repositorio.
+- **`toUi()`**: convierte el DTO en un `PokemonUi` listo para mostrar. La View nunca ve el `Pokemon` de Gson.
+- **Un solo `catch`**: el repositorio solo lanza `PokemonException`, y `toMessage()` elige el recurso de `strings.xml` para cada tipo. Al ser `sealed`, el `when` no compila si se añade un tipo nuevo sin mensaje. El ViewModel no importa nada de Retrofit (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)).
+- **`Factory`**: Android crea los ViewModel con un constructor sin parámetros. Como este recibe un repositorio, la `Factory` le indica cómo construirlo. No crea dependencias: las pide al `AppContainer` de la app (`APPLICATION_KEY` da acceso a la `Application`).
 
 ### Paso 9. Interfaz con Compose
 
-**`ui/screen/PokemonScreen.kt`**: punto de entrada de la UI. Obtiene el ViewModel con la `Factory` y elige el layout según el ancho de la ventana:
+**`ui/screen/PokemonScreen.kt`**: punto de entrada de la UI. Obtiene el ViewModel con la `Factory`, convierte el `StateFlow` en estado de Compose y elige el layout según el ancho de la ventana:
 
 ```kotlin
 @Composable
 fun PokemonScreen(
     viewModel: PokemonViewModel = viewModel(factory = PokemonViewModel.Factory)
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
     Scaffold(topBar = { /* logo + título */ }) { innerPadding ->
         when (getWindowSizeClass().widthSizeClass) {
             WindowWidthSizeClass.Compact -> PokemonCompactScreen(
-                uiState = viewModel.uiState,
+                uiState = uiState,
                 onRandomClick = viewModel::getRandomPokemon,
                 modifier = Modifier.padding(innerPadding)
             )
@@ -422,7 +537,9 @@ fun PokemonScreen(
 }
 ```
 
-**`ui/screen/PokemonStateLayout.kt`**: layout común. Resuelve el `when (uiState)` (spinner, mensaje de error) y pinta el botón. Cada pantalla solo aporta cómo se ve el estado `Success`:
+`collectAsStateWithLifecycle()` (de `lifecycle-runtime-compose`) recompone la UI cada vez que cambia el estado, y deja de recolectar cuando la app pasa a segundo plano.
+
+**`ui/screen/PokemonStateLayout.kt`**: layout común. Resuelve el `when (uiState)` (spinner, mensaje de error) y pinta el botón, que se desactiva mientras el estado es `Loading`. Cada pantalla solo aporta cómo se ve el estado `Success`:
 
 ```kotlin
 PokemonStateLayout(uiState = uiState, onRandomClick = onRandomClick, modifier = modifier) { pokemon ->
@@ -435,13 +552,45 @@ PokemonStateLayout(uiState = uiState, onRandomClick = onRandomClick, modifier = 
 
 **Componentes (`ui/components/`)**:
 
-- `PokemonImage`: `SubcomposeAsyncImage` de Coil, con spinner mientras carga y el logo como imagen de error.
-- `PokemonDetails`: muestra `#id - Nombre`, los tipos, y peso/altura divididos por 10 (PokéAPI usa hectogramos y decímetros).
-- `PokemonTypePill`: traduce el tipo al español y lo colorea con `PokemonTypeColors`.
+- `PokemonImage`: `SubcomposeAsyncImage` de Coil, con spinner mientras carga y el logo como imagen de error. Recibe `pokemon.imageUrl`: la ilustración oficial o, si no existe, el sprite.
+- `PokemonDetails`: recibe un `PokemonUi` y muestra el título, los tipos, y el peso y la altura. No formatea nada: los textos llegan listos y solo los resuelve con `asString()` y `stringResource()`.
+- `PokemonTypePill`: recibe un `PokemonTypeUi`. Muestra el nombre ya traducido y elige el color con `PokemonTypeColors` según `key`. El texto es blanco o negro según el fondo: `readableTextColor` elige el que tenga más contraste con la fórmula de WCAG, así todos los tipos superan 4.5:1.
 
-Como las pantallas no conocen el ViewModel, sus `@Preview` usan datos fijos (`previewPokemon`) y se ven sin red.
+Como las pantallas no conocen el ViewModel, sus `@Preview` usan datos fijos (`previewPokemon`, un `Pokemon` convertido con `toUi()`) y se ven sin red.
 
-### Paso 10. MainActivity
+### Paso 10. Application y MainActivity
+
+**`data/AppContainer.kt`**: el único sitio que decide qué implementación se usa para cada dependencia (inyección manual, sin Hilt ni Koin):
+
+```kotlin
+interface AppContainer {
+    val pokemonRepository: PokemonRepository
+}
+
+class DefaultAppContainer : AppContainer {
+    override val pokemonRepository: PokemonRepository by lazy {
+        DefaultPokemonRepository(RetrofitInstance.api)
+    }
+}
+```
+
+**`PokemonApplication.kt`**: crea el contenedor una sola vez al arrancar la app. Se registra en el manifest con `android:name` (ver [paso 3](#paso-3-manifest-permiso-de-internet-y-application)):
+
+```kotlin
+class PokemonApplication : Application() {
+    lateinit var container: AppContainer
+        private set
+
+    override fun onCreate() {
+        super.onCreate()
+        container = DefaultAppContainer()
+    }
+}
+```
+
+Si mañana se añade una caché o una base de datos, solo cambia `DefaultAppContainer`. El ViewModel y su `Factory` no se tocan.
+
+**`MainActivity.kt`**:
 
 ```kotlin
 class MainActivity : ComponentActivity() {
@@ -459,30 +608,67 @@ class MainActivity : ComponentActivity() {
 
 ---
 
-## Testear con una API falsa
+## Testear con piezas falsas
 
-Gracias a la inyección por constructor, el repositorio se puede probar sin red, implementando `ApiService` a mano:
+Gracias a la inyección por constructor, cada capa se prueba sin red y con una pieza falsa de la capa de abajo: el repositorio con un `ApiService` falso, y el ViewModel con un repositorio falso. Los tests están en `app/src/test/java/com/example/mypokemon/` y se ejecutan con `./gradlew testDebugUnitTest`.
+
+| Archivo | Qué prueba |
+|---|---|
+| `FakeApiService.kt` | No es un test: es un `ApiService` falso para los tests del repositorio. Cada test decide qué responde y puede revisar los IDs pedidos. |
+| `FakePokemonRepository.kt` | No es un test: es un `PokemonRepository` falso para los tests del ViewModel. Devuelve un `Pokemon` o lanza una `PokemonException`. |
+| `MainDispatcherRule.kt` | Regla de JUnit que reemplaza `Dispatchers.Main`, que no existe fuera de Android y que `viewModelScope` necesita. |
+| `data/repository/PokemonRepositoryTest.kt` | Respuesta correcta, y la traducción de cada fallo: 404 y 200 sin cuerpo a `Server`, error de red a `Network`, JSON ilegible a `Unknown`. |
+| `viewmodel/PokemonViewModelTest.kt` | Paso de `Loading` a `Success`, ID entre 1 y 1025, mensaje para cada `PokemonException`, peticiones simultáneas ignoradas y reintento. |
+| `viewmodel/PokemonUiTest.kt` | Conversión a `PokemonUi`: decimales según el idioma, datos faltantes, título y traducción de tipos. |
+| `ui/components/PokemonTypePillContrastTest.kt` | Todos los tipos cumplen el contraste mínimo de WCAG AA. |
+
+Los tests comparan IDs de recurso (`R.string.error_network`), no textos. Por eso no se rompen si cambia la redacción de un mensaje.
+
+El `ApiService` falso:
 
 ```kotlin
-class FakeApiService(private val result: Response<Pokemon>) : ApiService {
-    override suspend fun getPokemon(idOrName: String) = result
-}
+class FakeApiService(
+    var handler: suspend (idOrName: String) -> Response<Pokemon>
+) : ApiService {
+    val requestedIds = mutableListOf<String>()
 
-@Test
-fun `lanza HttpException con el código si el servidor responde 404`() = runTest {
-    val api = FakeApiService(Response.error(404, "".toResponseBody()))
-    val error = runCatching { PokemonRepository(api).getPokemon("25") }.exceptionOrNull()
-    assertEquals(404, (error as HttpException).code())
-}
-
-@Test
-fun `devuelve el Pokémon si la respuesta es correcta`() = runTest {
-    val api = FakeApiService(Response.success(Pokemon(id = 25, name = "pikachu")))
-    assertEquals("pikachu", PokemonRepository(api).getPokemon("25").name)
+    override suspend fun getPokemon(idOrName: String): Response<Pokemon> {
+        requestedIds += idOrName
+        return handler(idOrName)
+    }
 }
 ```
 
-Para estos tests hace falta añadir `kotlinx-coroutines-test` (`runTest`). `toResponseBody()` viene de `okhttp3.ResponseBody.Companion`. Para testear el ViewModel, ten en cuenta que usa `viewModelScope` (`Dispatchers.Main`): en tests unitarios hay que reemplazarlo con `Dispatchers.setMain(...)`.
+Un test del repositorio:
+
+```kotlin
+@Test
+fun `lanza Server con el código si el servidor responde 404`() = runTest {
+    val repository = DefaultPokemonRepository(
+        FakeApiService { Response.error(404, "".toResponseBody()) }
+    )
+    val error = runCatching { repository.getPokemon("25") }.exceptionOrNull()
+    assertEquals(404, (error as PokemonException.Server).code)
+}
+```
+
+Un test del ViewModel, con el repositorio falso. `MainDispatcherRule` usa un `StandardTestDispatcher`, que no ejecuta las corrutinas hasta llamar a `advanceUntilIdle()`. Por eso se puede ver el estado `Loading` antes de que llegue la respuesta:
+
+```kotlin
+@get:Rule
+val mainDispatcherRule = MainDispatcherRule()
+
+@Test
+fun `empieza en Loading y pasa a Success con el Pokémon listo para mostrar`() = runTest {
+    val viewModel = PokemonViewModel(FakePokemonRepository { pikachu })
+
+    assertEquals(PokemonUiState.Loading, viewModel.uiState.value)
+    advanceUntilIdle()
+    assertEquals(PokemonUiState.Success(pikachu.toUi()), viewModel.uiState.value)
+}
+```
+
+Para escribir estos tests hace falta la dependencia `kotlinx-coroutines-test` (`runTest`, `advanceUntilIdle`). `toResponseBody()` viene de `okhttp3.ResponseBody.Companion`; OkHttp ya llega como dependencia de Retrofit.
 
 ---
 

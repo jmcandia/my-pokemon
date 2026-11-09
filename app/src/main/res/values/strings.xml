@@ -1,3 +1,40 @@
 <resources>
     <string name="app_name">My Pokémon</string>
+
+    <!-- Pantalla principal -->
+    <string name="logo_description">Logo</string>
+    <string name="random_button">¡Buscar Pokémon aleatorio!</string>
+    <string name="image_unavailable">Imagen no disponible</string>
+
+    <!-- Detalles del Pokémon -->
+    <string name="pokemon_title">#%1$d - %2$s</string>
+    <string name="pokemon_title_unknown">#%1$d - Pokémon desconocido</string>
+    <string name="pokemon_unknown">Pokémon desconocido</string>
+    <string name="pokemon_weight">Peso: %1$s</string>
+    <string name="pokemon_height">Altura: %1$s</string>
+
+    <!-- Errores -->
+    <string name="error_network">Sin conexión. Revisa tu red e inténtalo de nuevo.</string>
+    <string name="error_server">El servidor respondió con error (%1$d).</string>
+    <string name="error_unknown">Respuesta inesperada del servidor.</string>
+
+    <!-- Tipos de Pokémon -->
+    <string name="type_normal">Normal</string>
+    <string name="type_fire">Fuego</string>
+    <string name="type_water">Agua</string>
+    <string name="type_electric">Eléctrico</string>
+    <string name="type_grass">Planta</string>
+    <string name="type_ice">Hielo</string>
+    <string name="type_fighting">Lucha</string>
+    <string name="type_poison">Veneno</string>
+    <string name="type_ground">Tierra</string>
+    <string name="type_flying">Volador</string>
+    <string name="type_psychic">Psíquico</string>
+    <string name="type_bug">Bicho</string>
+    <string name="type_rock">Roca</string>
+    <string name="type_ghost">Fantasma</string>
+    <string name="type_dragon">Dragón</string>
+    <string name="type_dark">Siniestro</string>
+    <string name="type_steel">Acero</string>
+    <string name="type_fairy">Hada</string>
 </resources>

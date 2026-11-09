@@ -9,24 +9,24 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.example.mypokemon.model.Types
+import com.example.mypokemon.R
+import com.example.mypokemon.ui.utils.asString
+import com.example.mypokemon.viewmodel.PokemonUi
 
-/** Muestra número, nombre, tipos, peso y altura del Pokémon. */
+/**
+ * Muestra número, nombre, tipos, peso y altura del Pokémon. Los datos llegan ya
+ * formateados desde el ViewModel (`PokemonUi`): aquí solo se distribuyen.
+ */
 @Composable
-fun PokemonDetails(
-    pokemonId: Int?,
-    name: String?,
-    types: List<Types>,
-    weight: Int?,
-    height: Int?
-) {
+fun PokemonDetails(pokemon: PokemonUi) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "#${pokemonId} - ${name?.replaceFirstChar { it.uppercase() }}",
+            text = pokemon.title.asString(),
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -34,9 +34,9 @@ fun PokemonDetails(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            types.forEach { type ->
+            pokemon.types.forEach { type ->
                 PokemonTypePill(
-                    type = type.type?.name ?: "normal",
+                    type = type,
                     modifier = Modifier
                         .padding(horizontal = 4.dp)
                 )
@@ -47,9 +47,8 @@ fun PokemonDetails(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // PokéAPI usa hectogramos y decímetros: se divide por 10 para kg y m.
-            Text(text = "Peso: ${weight?.div(10.0)} kg")
-            Text(text = "Altura: ${height?.div(10.0)} m")
+            Text(text = stringResource(R.string.pokemon_weight, pokemon.weight))
+            Text(text = stringResource(R.string.pokemon_height, pokemon.height))
         }
     }
 }
