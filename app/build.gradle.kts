@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mypokemon"
+    namespace = "cl.duoc.mypokemon"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.mypokemon"
+        applicationId = "cl.duoc.mypokemon"
         minSdk = 30
         targetSdk = 37
         versionCode = 1

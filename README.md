@@ -71,7 +71,7 @@ El proyecto sigue **MVVM** (Model–View–ViewModel), con capas simples y sin f
 - **Cada capa solo conoce a la de abajo, y por su contrato.** La View recibe un `PokemonUi` ya formateado, no el DTO de Gson. El ViewModel depende de la interfaz `PokemonRepository` y solo ve `PokemonException`, nunca Retrofit. Los textos están en `strings.xml`: el ViewModel entrega un `UiText` (ID de recurso + argumentos) y la View lo resuelve.
 - Las dependencias se pasan **por constructor** y se crean en un solo sitio, el `AppContainer`, que vive en `PokemonApplication`. Eso permite testear cada capa con piezas falsas.
 
-Estructura de carpetas (`app/src/main/java/com/example/mypokemon/`):
+Estructura de carpetas (`app/src/main/java/cl/duoc/mypokemon/`):
 
 ```
 MainActivity.kt                 Punto de entrada: tema + PokemonScreen
@@ -114,7 +114,7 @@ res/values-en/strings.xml       Traducción al inglés
 En Android Studio: **File ▸ New ▸ New Project ▸ Empty Activity** (la plantilla de Compose).
 
 - **Name:** `My Pokémon`
-- **Package name:** `com.example.mypokemon`
+- **Package name:** `cl.duoc.mypokemon`
 - **Minimum SDK:** API 30 (Android 11)
 - **Build configuration language:** Kotlin DSL
 
@@ -380,7 +380,7 @@ Tres reglas que conviene respetar al replicarlo:
 Gson crea los DTOs y rellena sus campos por reflexión. Si R8 renombra los campos o borra el constructor vacío del paquete `model`, el JSON deja de mapearse y los campos quedan en `null`. Por eso `app/src/main/keepRules/rules.keep` incluye:
 
 ```
--keep class com.example.mypokemon.model.** { *; }
+-keep class cl.duoc.mypokemon.model.** { *; }
 ```
 
 Hoy `packageScope` (en `app/build.gradle.kts`) limita R8 a `androidx`, `kotlin` y `kotlinx`, así que el código de la app no se optimiza. La regla protege los DTOs si ese alcance se amplía.
@@ -689,7 +689,7 @@ class MainActivity : ComponentActivity() {
 
 ## Testear con piezas falsas
 
-Gracias a la inyección por constructor, cada capa se prueba sin red y con una pieza falsa de la capa de abajo: el repositorio con un `ApiService` falso, y el ViewModel con un repositorio falso. Los tests unitarios están en `app/src/test/java/com/example/mypokemon/` y se ejecutan con `./gradlew testDebugUnitTest`, sin emulador. Los de UI se explican en [Tests de UI](#tests-de-ui).
+Gracias a la inyección por constructor, cada capa se prueba sin red y con una pieza falsa de la capa de abajo: el repositorio con un `ApiService` falso, y el ViewModel con un repositorio falso. Los tests unitarios están en `app/src/test/java/cl/duoc/mypokemon/` y se ejecutan con `./gradlew testDebugUnitTest`, sin emulador. Los de UI se explican en [Tests de UI](#tests-de-ui).
 
 | Archivo | Qué prueba |
 |---|---|
@@ -753,7 +753,7 @@ Para escribir estos tests hace falta la dependencia `kotlinx-coroutines-test` (`
 
 ### Tests de UI
 
-`app/src/androidTest/java/com/example/mypokemon/ui/screen/PokemonScreensTest.kt` prueba las pantallas en un emulador o dispositivo con `./gradlew connectedDebugAndroidTest`. Como las pantallas no conocen el ViewModel, cada test les pasa un estado fijo y comprueba qué muestran, sin red ni repositorio:
+`app/src/androidTest/java/cl/duoc/mypokemon/ui/screen/PokemonScreensTest.kt` prueba las pantallas en un emulador o dispositivo con `./gradlew connectedDebugAndroidTest`. Como las pantallas no conocen el ViewModel, cada test les pasa un estado fijo y comprueba qué muestran, sin red ni repositorio:
 
 | Estado | Qué comprueba |
 |---|---|

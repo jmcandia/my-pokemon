@@ -15,4 +15,4 @@
 # su constructor vacío ni renombrar o eliminar sus campos. Hoy `packageScope` (en
 # app/build.gradle.kts) deja el código de la app fuera de R8; esta regla los
 # protege si ese alcance se amplía.
--keep class com.example.mypokemon.model.** { *; }
+-keep class cl.duoc.mypokemon.model.** { *; }
