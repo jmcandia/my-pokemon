@@ -17,18 +17,20 @@ import com.example.mypokemon.viewmodel.PokemonUiState
 /**
  * Layout para pantallas medianas y anchas (tablet, plegable, teléfono en horizontal):
  * detalles a la izquierda e imagen a la derecha, centrados como grupo. No conoce el
- * ViewModel: recibe el estado y la
- * acción como parámetros.
+ * ViewModel: recibe el estado y las acciones
+ * como parámetros.
  */
 @Composable
 fun PokemonMediumScreen(
     uiState: PokemonUiState,
     onRandomClick: () -> Unit,
+    onSearch: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     PokemonStateLayout(
         uiState = uiState,
         onRandomClick = onRandomClick,
+        onSearch = onSearch,
         modifier = modifier
     ) { pokemon ->
         // Detalles a la izquierda e imagen a la derecha. Sin pesos, la fila ocupa
@@ -58,6 +60,7 @@ fun PokemonMediumScreen(
 fun PokemonMediumScreenPreview() {
     PokemonMediumScreen(
         uiState = PokemonUiState.Success(previewPokemon),
-        onRandomClick = {}
+        onRandomClick = {},
+        onSearch = {}
     )
 }

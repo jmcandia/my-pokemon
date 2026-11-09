@@ -27,7 +27,13 @@ data class Pokemon(
     // Nullable como el resto: con `"types": null` en el JSON, Gson asignaría `null`
     // aunque el tipo dijera lo contrario, y la app fallaría al recorrer la lista.
     @SerializedName("types")
-    val types: List<Types>? = null
+    val types: List<Types>? = null,
+    @SerializedName("stats")
+    val stats: List<PokemonStat>? = null,
+    @SerializedName("abilities")
+    val abilities: List<PokemonAbility>? = null,
+    @SerializedName("cries")
+    val cries: Cries? = null
 ) {
     /**
      * URL de la imagen a mostrar: la ilustración oficial si existe y, si no, el

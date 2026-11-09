@@ -5,6 +5,8 @@
     <!-- Pantalla principal -->
     <string name="random_button">Find a random Pokémon!</string>
     <string name="image_unavailable">Image not available</string>
+    <string name="search_label">Name or number</string>
+    <string name="search_button">Search</string>
 
     <!-- Detalles del Pokémon -->
     <string name="pokemon_title">#%1$d - %2$s</string>
@@ -14,9 +16,22 @@
     <string name="pokemon_height">Height: %1$s</string>
     <string name="weight_value">%1$.1f kg</string>
     <string name="height_value">%1$.1f m</string>
+    <string name="play_cry">Play cry</string>
+    <string name="abilities_label">Abilities: %1$s</string>
+    <string name="ability_hidden">%1$s (hidden)</string>
+
+    <!-- Estadísticas base -->
+    <string name="stats_title">Base stats</string>
+    <string name="stat_hp">HP</string>
+    <string name="stat_attack">Attack</string>
+    <string name="stat_defense">Defense</string>
+    <string name="stat_special_attack">Sp. Atk</string>
+    <string name="stat_special_defense">Sp. Def</string>
+    <string name="stat_speed">Speed</string>
 
     <!-- Errores -->
     <string name="error_network">No connection. Check your network and try again.</string>
+    <string name="error_not_found">No Pokémon called “%1$s”.</string>
     <string name="error_server">The server responded with an error (%1$d).</string>
     <string name="error_unknown">Unexpected response from the server.</string>
 

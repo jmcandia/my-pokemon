@@ -13,17 +13,19 @@ import com.example.mypokemon.viewmodel.PokemonUiState
 
 /**
  * Layout para pantallas estrechas (teléfono en vertical): imagen arriba y detalles
- * debajo. No conoce el ViewModel: recibe el estado y la acción como parámetros.
+ * debajo. No conoce el ViewModel: recibe el estado y las acciones como parámetros.
  */
 @Composable
 fun PokemonCompactScreen(
     uiState: PokemonUiState,
     onRandomClick: () -> Unit,
+    onSearch: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     PokemonStateLayout(
         uiState = uiState,
         onRandomClick = onRandomClick,
+        onSearch = onSearch,
         modifier = modifier
     ) { pokemon ->
         PokemonImage(
@@ -44,6 +46,7 @@ fun PokemonCompactScreen(
 fun PokemonCompactScreenPreview() {
     PokemonCompactScreen(
         uiState = PokemonUiState.Success(previewPokemon),
-        onRandomClick = {}
+        onRandomClick = {},
+        onSearch = {}
     )
 }

@@ -6,6 +6,8 @@
     <!-- Pantalla principal -->
     <string name="random_button">¡Buscar Pokémon aleatorio!</string>
     <string name="image_unavailable">Imagen no disponible</string>
+    <string name="search_label">Nombre o número</string>
+    <string name="search_button">Buscar</string>
 
     <!-- Detalles del Pokémon -->
     <string name="pokemon_title">#%1$d - %2$s</string>
@@ -16,9 +18,22 @@
     <!-- El separador decimal lo pone Android según el idioma (6,0 en español). -->
     <string name="weight_value">%1$.1f kg</string>
     <string name="height_value">%1$.1f m</string>
+    <string name="play_cry">Escuchar grito</string>
+    <string name="abilities_label">Habilidades: %1$s</string>
+    <string name="ability_hidden">%1$s (oculta)</string>
+
+    <!-- Estadísticas base -->
+    <string name="stats_title">Estadísticas base</string>
+    <string name="stat_hp">PS</string>
+    <string name="stat_attack">Ataque</string>
+    <string name="stat_defense">Defensa</string>
+    <string name="stat_special_attack">At. esp.</string>
+    <string name="stat_special_defense">Def. esp.</string>
+    <string name="stat_speed">Velocidad</string>
 
     <!-- Errores -->
     <string name="error_network">Sin conexión. Revisa tu red e inténtalo de nuevo.</string>
+    <string name="error_not_found">No existe ningún Pokémon «%1$s».</string>
     <string name="error_server">El servidor respondió con error (%1$d).</string>
     <string name="error_unknown">Respuesta inesperada del servidor.</string>
 

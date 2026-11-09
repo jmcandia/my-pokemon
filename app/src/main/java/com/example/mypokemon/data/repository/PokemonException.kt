@@ -11,7 +11,10 @@ sealed class PokemonException(cause: Throwable? = null) : Exception(cause) {
     // Sin conexión, timeout o fallo de DNS.
     class Network(cause: Throwable) : PokemonException(cause)
 
-    // El servidor respondió con error (404, 500…) o sin cuerpo. Guarda el código HTTP.
+    // No existe un Pokémon con ese nombre o número (el servidor respondió 404).
+    class NotFound : PokemonException()
+
+    // El servidor respondió con otro error (500…) o sin cuerpo. Guarda el código HTTP.
     class Server(val code: Int) : PokemonException()
 
     // Cualquier otro fallo, por ejemplo un JSON que Gson no puede leer.

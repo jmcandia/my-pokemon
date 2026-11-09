@@ -10,15 +10,21 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasProgressBarRangeInfo
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.mypokemon.R
+import com.example.mypokemon.model.Cries
+import com.example.mypokemon.model.NamedResource
 import com.example.mypokemon.model.Pokemon
+import com.example.mypokemon.model.PokemonAbility
+import com.example.mypokemon.model.PokemonStat
 import com.example.mypokemon.model.Type
 import com.example.mypokemon.model.Types
 import com.example.mypokemon.ui.theme.MyPokémonTheme
@@ -50,7 +56,12 @@ class PokemonScreensTest {
         name = "pikachu",
         height = 4,
         weight = 60,
-        types = listOf(Types(slot = 1, type = Type(name = "electric")))
+        types = listOf(Types(slot = 1, type = Type(name = "electric"))),
+        stats = listOf(PokemonStat(baseStat = 90, stat = NamedResource(name = "speed"))),
+        abilities = listOf(
+            PokemonAbility(ability = NamedResource(name = "lightning-rod"), isHidden = true)
+        ),
+        cries = Cries(latest = "https://example.com/25.ogg")
     ).toUi()
 
     private val title = "#25 - Pikachu"
@@ -59,10 +70,70 @@ class PokemonScreensTest {
     // Cualquier spinner (CircularProgressIndicator sin progreso definido).
     private val spinner = hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate)
 
-    private fun showCompact(uiState: PokemonUiState, onRandomClick: () -> Unit = {}) {
+    private val searchLabel get() = context.getString(R.string.search_label)
+    private val searchButton get() = context.getString(R.string.search_button)
+
+    private fun showCompact(
+        uiState: PokemonUiState,
+        onRandomClick: () -> Unit = {},
+        onSearch: (String) -> Unit = {}
+    ) {
         composeRule.setContent {
-            MyPokémonTheme { PokemonCompactScreen(uiState = uiState, onRandomClick = onRandomClick) }
+            MyPokémonTheme {
+                PokemonCompactScreen(
+                    uiState = uiState,
+                    onRandomClick = onRandomClick,
+                    onSearch = onSearch
+                )
+            }
         }
+    }
+
+    @Test
+    fun muestra_grito_habilidades_y_estadisticas() {
+        showCompact(PokemonUiState.Success(pikachu))
+
+        composeRule.onNodeWithText(context.getString(R.string.play_cry), substring = true)
+            .assertIsDisplayed()
+        val abilities = context.getString(
+            R.string.abilities_label,
+            context.getString(R.string.ability_hidden, "Lightning rod")
+        )
+        composeRule.onNodeWithText(abilities).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.stats_title)).assertExists()
+        // La fila de la estadística se lee entera: nombre y valor juntos.
+        composeRule.onNode(
+            hasText(context.getString(R.string.stat_speed)) and hasText("90")
+        ).assertExists()
+    }
+
+    @Test
+    fun buscar_envia_el_texto_escrito() {
+        val searches = mutableListOf<String>()
+        showCompact(PokemonUiState.Success(pikachu), onSearch = { searches += it })
+
+        composeRule.onNodeWithText(searchLabel).performTextInput("Mr. Mime")
+        composeRule.onNodeWithText(searchButton).performClick()
+
+        // La pantalla envía el texto tal cual; normalizarlo es tarea del ViewModel.
+        assertEquals(listOf("Mr. Mime"), searches)
+    }
+
+    @Test
+    fun el_boton_buscar_se_desactiva_sin_texto_y_durante_la_carga() {
+        showCompact(PokemonUiState.Success(pikachu))
+        composeRule.onNodeWithText(searchButton).assertIsNotEnabled()
+
+        composeRule.onNodeWithText(searchLabel).performTextInput("pikachu")
+        composeRule.onNodeWithText(searchButton).assertIsEnabled()
+    }
+
+    @Test
+    fun durante_la_carga_no_se_puede_buscar() {
+        showCompact(PokemonUiState.Loading())
+
+        composeRule.onNodeWithText(searchLabel).performTextInput("pikachu")
+        composeRule.onNodeWithText(searchButton).assertIsNotEnabled()
     }
 
     @Test
@@ -131,7 +202,11 @@ class PokemonScreensTest {
     fun pantalla_mediana_muestra_el_pokemon_y_el_boton() {
         composeRule.setContent {
             MyPokémonTheme {
-                PokemonMediumScreen(uiState = PokemonUiState.Success(pikachu), onRandomClick = {})
+                PokemonMediumScreen(
+                    uiState = PokemonUiState.Success(pikachu),
+                    onRandomClick = {},
+                    onSearch = {}
+                )
             }
         }
 

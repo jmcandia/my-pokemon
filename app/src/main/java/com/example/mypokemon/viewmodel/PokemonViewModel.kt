@@ -50,25 +50,37 @@ class PokemonViewModel(
     init {
         // Al crear el ViewModel carga el último Pokémon mostrado, si se guardó antes
         // de que Android cerrara la app, o uno aleatorio.
-        loadPokemon(savedStateHandle[KEY_LAST_ID] ?: randomId())
+        val savedId: Int? = savedStateHandle[KEY_LAST_ID]
+        loadPokemon((savedId ?: randomId()).toString())
     }
 
     /** Pide un Pokémon con ID aleatorio y actualiza `uiState` con el resultado. */
     fun getRandomPokemon() {
-        loadPokemon(randomId())
+        loadPokemon(randomId().toString())
+    }
+
+    /**
+     * Busca el Pokémon por nombre o número, tal como lo escribió el usuario. Si no
+     * queda nada que buscar (texto vacío o solo espacios), no hace nada.
+     */
+    fun searchPokemon(query: String) {
+        val idOrName = normalizeQuery(query)
+        if (idOrName.isEmpty()) return
+        loadPokemon(idOrName)
     }
 
     // PokéAPI tiene Pokémon del 1 al 1025 (`nextInt` excluye el límite superior).
     private fun randomId(): Int = random.nextInt(1, 1026)
 
     /**
-     * Pide el Pokémon `id` y actualiza `uiState` con el resultado.
+     * Pide el Pokémon `idOrName` (número o nombre de PokéAPI) y actualiza `uiState`
+     * con el resultado.
      *
-     * Si ya hay una petición en curso, no hace nada. La UI también desactiva el botón
-     * mientras carga; esta comprobación evita peticiones simultáneas aunque se llame
-     * desde otro sitio.
+     * Si ya hay una petición en curso, no hace nada. La UI también desactiva los
+     * botones mientras carga; esta comprobación evita peticiones simultáneas aunque se
+     * llame desde otro sitio.
      */
-    private fun loadPokemon(id: Int) {
+    private fun loadPokemon(idOrName: String) {
         if (loadJob?.isActive == true) return
 
         // El Pokémon que se ve ahora, para seguir mostrándolo mientras carga el nuevo.
@@ -78,22 +90,26 @@ class PokemonViewModel(
         loadJob = viewModelScope.launch {
             _uiState.value = PokemonUiState.Loading(previous)
             _uiState.value = try {
-                val pokemon = repository.getPokemon(id.toString())
-                // Solo se guarda un ID que cargó bien: es el que se está mostrando.
-                savedStateHandle[KEY_LAST_ID] = id
+                val pokemon = repository.getPokemon(idOrName)
+                // Solo se guarda el ID de un Pokémon que cargó bien: es el que se está
+                // mostrando. Se usa el número de la respuesta, también si se buscó por
+                // nombre.
+                pokemon.id?.let { savedStateHandle[KEY_LAST_ID] = it }
                 // Convierte el DTO de red en un modelo listo para mostrar.
                 PokemonUiState.Success(pokemon.toUi())
             } catch (e: PokemonException) {
                 // El repositorio solo lanza `PokemonException`. La cancelación de la
                 // corrutina (`CancellationException`) no entra aquí y se propaga sola.
-                PokemonUiState.Error(e.toMessage())
+                PokemonUiState.Error(e.toMessage(idOrName))
             }
         }
     }
 
     // Elige el mensaje de cada tipo de error. El texto está en `strings.xml`.
-    private fun PokemonException.toMessage(): UiText = when (this) {
+    // `idOrName` es lo que se pidió; aparece en el mensaje de "no encontrado".
+    private fun PokemonException.toMessage(idOrName: String): UiText = when (this) {
         is PokemonException.Network -> UiText.Resource(R.string.error_network)
+        is PokemonException.NotFound -> UiText.Resource(R.string.error_not_found, listOf(idOrName))
         is PokemonException.Server -> UiText.Resource(R.string.error_server, listOf(code))
         is PokemonException.Unknown -> UiText.Resource(R.string.error_unknown)
     }

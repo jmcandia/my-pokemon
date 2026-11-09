@@ -105,17 +105,63 @@ class PokemonViewModelTest {
     fun `recupera el último Pokémon si Android cerró la app`() = runTest {
         // El `SavedStateHandle` es lo que Android conserva al cerrar el proceso.
         val savedStateHandle = SavedStateHandle()
-        val firstRepository = FakePokemonRepository { pikachu }
-        createViewModel(firstRepository, savedStateHandle)
+        createViewModel(FakePokemonRepository { pikachu }, savedStateHandle)
         advanceUntilIdle()
-        val shownId = firstRepository.requestedIds.single()
 
-        // Un ViewModel nuevo con el mismo estado guardado pide el mismo ID.
+        // Un ViewModel nuevo con el mismo estado guardado pide el Pokémon mostrado
+        // (Pikachu, el 25), no uno aleatorio.
         val secondRepository = FakePokemonRepository { pikachu }
         createViewModel(secondRepository, savedStateHandle)
         advanceUntilIdle()
 
-        assertEquals(listOf(shownId), secondRepository.requestedIds)
+        assertEquals(listOf("25"), secondRepository.requestedIds)
+    }
+
+    @Test
+    fun `busca por nombre normalizado y guarda el número del resultado`() = runTest {
+        val savedStateHandle = SavedStateHandle()
+        val repository = FakePokemonRepository { pikachu }
+        val viewModel = createViewModel(repository, savedStateHandle)
+        advanceUntilIdle()
+
+        viewModel.searchPokemon("  Pikachu ")
+        advanceUntilIdle()
+
+        assertEquals("pikachu", repository.requestedIds.last())
+        assertEquals(PokemonUiState.Success(pikachu.toUi()), viewModel.uiState.value)
+        // Al recrearse tras cerrar la app, pide por número aunque se buscó por nombre.
+        val restored = FakePokemonRepository { pikachu }
+        createViewModel(restored, savedStateHandle)
+        advanceUntilIdle()
+        assertEquals(listOf("25"), restored.requestedIds)
+    }
+
+    @Test
+    fun `ignora una búsqueda vacía`() = runTest {
+        val repository = FakePokemonRepository { pikachu }
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.searchPokemon("   ")
+        advanceUntilIdle()
+
+        assertEquals(1, repository.requestedIds.size) // Solo la carga inicial.
+    }
+
+    @Test
+    fun `muestra qué se buscó si el Pokémon no existe`() = runTest {
+        val repository = FakePokemonRepository { pikachu }
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        repository.handler = { throw PokemonException.NotFound() }
+        viewModel.searchPokemon("Agumon")
+        advanceUntilIdle()
+
+        assertEquals(
+            PokemonUiState.Error(UiText.Resource(R.string.error_not_found, listOf("agumon"))),
+            viewModel.uiState.value
+        )
     }
 
     @Test

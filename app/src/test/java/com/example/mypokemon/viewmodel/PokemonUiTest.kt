@@ -90,9 +90,63 @@ class PokemonUiTest {
     }
 
     @Test
+    fun `traduce las estadísticas y calcula la barra respecto a 255`() {
+        assertEquals(
+            PokemonStatUi(UiText.Resource(R.string.stat_attack), 51, 0.2f),
+            statUi("attack", 51)
+        )
+        // Una estadística desconocida se muestra con su nombre formateado.
+        assertEquals(UiText.Plain("Accuracy"), statUi("accuracy", 10).label)
+        // La barra nunca pasa del 100 %.
+        assertEquals(1f, statUi("hp", 300).fraction)
+    }
+
+    @Test
+    fun `formatea las habilidades y marca las ocultas`() {
+        assertEquals(UiText.Plain("Static"), abilityUi("static", isHidden = false))
+        assertEquals(
+            UiText.Resource(R.string.ability_hidden, listOf("Lightning rod")),
+            abilityUi("lightning-rod", isHidden = true)
+        )
+    }
+
+    @Test
+    fun `lee estadísticas, habilidades y grito con los nombres reales del JSON`() {
+        // Fragmento real de la respuesta de PokéAPI (claves en snake_case).
+        val json = """
+            {
+              "id": 25,
+              "stats": [
+                {"base_stat": 35, "effort": 0, "stat": {"name": "hp", "url": "x"}},
+                {"base_stat": null, "stat": {"name": "speed"}}
+              ],
+              "abilities": [
+                {"is_hidden": false, "slot": 1, "ability": {"name": "static", "url": "x"}},
+                {"is_hidden": true, "slot": 3, "ability": {"name": "lightning-rod", "url": "x"}},
+                {"is_hidden": false, "ability": null}
+              ],
+              "cries": {"latest": "https://example.com/25.ogg", "legacy": "x"}
+            }
+        """.trimIndent()
+
+        val ui = Gson().fromJson(json, Pokemon::class.java).toUi()
+
+        // La estadística sin valor y la habilidad sin nombre se omiten.
+        assertEquals(listOf(statUi("hp", 35)), ui.stats)
+        assertEquals(
+            listOf(abilityUi("static", false), abilityUi("lightning-rod", true)),
+            ui.abilities
+        )
+        assertEquals("https://example.com/25.ogg", ui.cryUrl)
+    }
+
+    @Test
     fun `no falla si Gson recibe nulls explícitos en el JSON`() {
         // Gson ignora la nulabilidad de Kotlin: asigna `null` aunque haya default.
-        val json = """{"id": 25, "name": null, "sprites": null, "types": null}"""
+        val json = """
+            {"id": 25, "name": null, "sprites": null, "types": null,
+             "stats": null, "abilities": null, "cries": null}
+        """.trimIndent()
         val pokemon = Gson().fromJson(json, Pokemon::class.java)
 
         val ui = pokemon.toUi()
@@ -101,5 +155,8 @@ class PokemonUiTest {
         assertEquals(UiText.Resource(R.string.pokemon_title_unknown, listOf(25)), ui.title)
         assertNull(ui.imageUrl)
         assertEquals(UiText.Plain("—"), ui.weight)
+        assertEquals(emptyList<PokemonStatUi>(), ui.stats)
+        assertEquals(emptyList<UiText>(), ui.abilities)
+        assertNull(ui.cryUrl)
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -24,24 +25,30 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.mypokemon.R
+import com.example.mypokemon.model.Cries
+import com.example.mypokemon.model.NamedResource
 import com.example.mypokemon.model.Pokemon
+import com.example.mypokemon.model.PokemonAbility
+import com.example.mypokemon.model.PokemonStat
 import com.example.mypokemon.model.Sprites
 import com.example.mypokemon.model.Type
 import com.example.mypokemon.model.Types
+import com.example.mypokemon.ui.components.PokemonSearchBar
 import com.example.mypokemon.ui.utils.asString
 import com.example.mypokemon.viewmodel.PokemonUi
 import com.example.mypokemon.viewmodel.PokemonUiState
 import com.example.mypokemon.viewmodel.toUi
 
 /**
- * Layout común a todos los tamaños de pantalla: muestra los estados de carga y
- * error, y el botón de búsqueda aleatoria. Cada pantalla solo aporta, en
- * `successContent`, cómo se distribuye un Pokémon ya cargado.
+ * Layout común a todos los tamaños de pantalla: muestra la barra de búsqueda, los
+ * estados de carga y error, y el botón de búsqueda aleatoria. Cada pantalla solo
+ * aporta, en `successContent`, cómo se distribuye un Pokémon ya cargado.
  */
 @Composable
 fun PokemonStateLayout(
     uiState: PokemonUiState,
     onRandomClick: () -> Unit,
+    onSearch: (String) -> Unit,
     modifier: Modifier = Modifier,
     successContent: @Composable (PokemonUi) -> Unit
 ) {
@@ -54,6 +61,17 @@ fun PokemonStateLayout(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
+        // Arriba, con un ancho máximo para que no se estire en tablets. Se desactiva
+        // mientras carga, igual que el botón aleatorio.
+        PokemonSearchBar(
+            enabled = uiState !is PokemonUiState.Loading,
+            onSearch = onSearch,
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+
         when (uiState) {
             is PokemonUiState.Loading -> {
                 val previous = uiState.previous
@@ -132,5 +150,14 @@ internal val previewPokemon = Pokemon(
     height = 4,
     weight = 60,
     sprites = Sprites(frontDefault = null),
-    types = arrayListOf(Types(slot = 1, type = Type(name = "electric")))
+    types = arrayListOf(Types(slot = 1, type = Type(name = "electric"))),
+    stats = listOf(
+        "hp" to 35, "attack" to 55, "defense" to 40,
+        "special-attack" to 50, "special-defense" to 50, "speed" to 90
+    ).map { (name, value) -> PokemonStat(baseStat = value, stat = NamedResource(name = name)) },
+    abilities = listOf(
+        PokemonAbility(ability = NamedResource(name = "static"), isHidden = false),
+        PokemonAbility(ability = NamedResource(name = "lightning-rod"), isHidden = true)
+    ),
+    cries = Cries(latest = "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/25.ogg")
 ).toUi()

@@ -20,7 +20,22 @@ data class PokemonUi(
     // se formatee al dibujar, con el idioma vigente: si el usuario cambia el idioma,
     // el ViewModel sobrevive pero el separador decimal se actualiza.
     val weight: UiText,
-    val height: UiText
+    val height: UiText,
+    // Estadísticas base, en el orden de PokéAPI (PS, ataque, defensa…).
+    val stats: List<PokemonStatUi> = emptyList(),
+    // Habilidades: "Static", "Lightning rod (oculta)".
+    val abilities: List<UiText> = emptyList(),
+    // URL del grito (.ogg), o null si PokéAPI no lo tiene.
+    val cryUrl: String? = null
+)
+
+/** Estadística base lista para la barra. */
+data class PokemonStatUi(
+    // Nombre traducido ("Ataque"), o el original formateado si es desconocida.
+    val label: UiText,
+    val value: Int,
+    // Proporción de la barra, de 0 a 1, respecto al máximo `MAX_BASE_STAT`.
+    val fraction: Float
 )
 
 /** Tipo de un Pokémon, listo para la pill. */
@@ -33,6 +48,10 @@ data class PokemonTypeUi(
 
 private const val MISSING = "—"
 
+// Estadística base más alta de todos los Pokémon (los PS de Blissey). Las barras se
+// dibujan respecto a este valor, así son comparables entre Pokémon.
+internal const val MAX_BASE_STAT = 255
+
 /** Convierte el DTO de red en el modelo de UI. */
 internal fun Pokemon.toUi(): PokemonUi = PokemonUi(
     title = formatTitle(id, name),
@@ -41,8 +60,55 @@ internal fun Pokemon.toUi(): PokemonUi = PokemonUi(
     // muestra como "normal".
     types = types.orEmpty().map { typeUi(it.type?.name ?: "normal") },
     weight = formatTenths(weight, R.string.weight_value),
-    height = formatTenths(height, R.string.height_value)
+    height = formatTenths(height, R.string.height_value),
+    // Una estadística sin valor no se puede dibujar: se omite.
+    stats = stats.orEmpty().mapNotNull { stat ->
+        stat.baseStat?.let { statUi(stat.stat?.name, it) }
+    },
+    // Una habilidad sin nombre no aporta nada: se omite.
+    abilities = abilities.orEmpty().mapNotNull { ability ->
+        ability.ability?.name?.let { abilityUi(it, ability.isHidden == true) }
+    },
+    cryUrl = cries?.latest
 )
+
+/**
+ * Convierte un identificador de PokéAPI en texto legible: `lightning-rod` →
+ * "Lightning rod".
+ */
+internal fun formatSlug(slug: String): String =
+    slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+
+/** Traduce la estadística y calcula la proporción de su barra. */
+internal fun statUi(name: String?, value: Int): PokemonStatUi {
+    val labelRes = when (name) {
+        "hp" -> R.string.stat_hp
+        "attack" -> R.string.stat_attack
+        "defense" -> R.string.stat_defense
+        "special-attack" -> R.string.stat_special_attack
+        "special-defense" -> R.string.stat_special_defense
+        "speed" -> R.string.stat_speed
+        else -> null
+    }
+    val label = labelRes?.let { UiText.Resource(it) }
+        ?: UiText.Plain(name?.let(::formatSlug) ?: MISSING)
+    val fraction = (value.toFloat() / MAX_BASE_STAT).coerceIn(0f, 1f)
+    return PokemonStatUi(label = label, value = value, fraction = fraction)
+}
+
+/**
+ * Nombre legible de la habilidad. PokéAPI solo da el identificador en inglés;
+ * traducirlo exigiría una petición más por habilidad, así que se muestra
+ * formateado. Si es oculta, se marca con "(oculta)".
+ */
+internal fun abilityUi(name: String, isHidden: Boolean): UiText {
+    val displayName = formatSlug(name)
+    return if (isHidden) {
+        UiText.Resource(R.string.ability_hidden, listOf(displayName))
+    } else {
+        UiText.Plain(displayName)
+    }
+}
 
 /** Título "#25 - Pikachu". Maneja la falta de número, de nombre o de ambos. */
 internal fun formatTitle(pokemonId: Int?, name: String?): UiText {

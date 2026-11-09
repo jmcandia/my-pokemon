@@ -27,15 +27,26 @@ class PokemonRepositoryTest {
     }
 
     @Test
-    fun `lanza Server con el código si el servidor responde 404`() = runTest {
+    fun `lanza NotFound si el servidor responde 404`() = runTest {
         val repository = DefaultPokemonRepository(
             FakeApiService { Response.error(404, "".toResponseBody()) }
         )
 
         val error = errorOf(repository)
 
+        assertTrue(error is PokemonException.NotFound)
+    }
+
+    @Test
+    fun `lanza Server con el código si el servidor responde 500`() = runTest {
+        val repository = DefaultPokemonRepository(
+            FakeApiService { Response.error(500, "".toResponseBody()) }
+        )
+
+        val error = errorOf(repository)
+
         assertTrue(error is PokemonException.Server)
-        assertEquals(404, (error as PokemonException.Server).code)
+        assertEquals(500, (error as PokemonException.Server).code)
     }
 
     @Test

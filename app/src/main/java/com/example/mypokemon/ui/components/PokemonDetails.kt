@@ -18,7 +18,8 @@ import com.example.mypokemon.ui.utils.asString
 import com.example.mypokemon.viewmodel.PokemonUi
 
 /**
- * Muestra número, nombre, tipos, peso y altura del Pokémon. Los datos llegan ya
+ * Muestra número, nombre, grito, tipos, peso, altura, habilidades y estadísticas
+ * del Pokémon. Los datos llegan ya
  * formateados desde el ViewModel (`PokemonUi`): aquí solo se distribuyen.
  */
 @Composable
@@ -33,6 +34,8 @@ fun PokemonDetails(pokemon: PokemonUi) {
             modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium
         )
+
+        pokemon.cryUrl?.let { PokemonCryButton(url = it) }
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -54,5 +57,13 @@ fun PokemonDetails(pokemon: PokemonUi) {
             Text(text = stringResource(R.string.pokemon_weight, pokemon.weight.asString()))
             Text(text = stringResource(R.string.pokemon_height, pokemon.height.asString()))
         }
+
+        if (pokemon.abilities.isNotEmpty()) {
+            // `map` es inline, así que se puede llamar a `asString()` (composable) dentro.
+            val abilities = pokemon.abilities.map { it.asString() }.joinToString(", ")
+            Text(text = stringResource(R.string.abilities_label, abilities))
+        }
+
+        PokemonStats(stats = pokemon.stats, modifier = Modifier.padding(top = 8.dp))
     }
 }

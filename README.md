@@ -1,6 +1,6 @@
 # My Pokémon
 
-App Android que muestra un Pokémon aleatorio (ID 1–1025) obtenido de [PokéAPI](https://pokeapi.co/). Cada vez que se pulsa **¡Buscar Pokémon aleatorio!** pide uno nuevo y muestra su imagen, número, nombre, tipos, peso y altura.
+App Android que muestra un Pokémon aleatorio (ID 1–1025) obtenido de [PokéAPI](https://pokeapi.co/). Cada vez que se pulsa **¡Buscar Pokémon aleatorio!** pide uno nuevo; también se puede buscar uno por nombre o número. Muestra su imagen, número, nombre, tipos, peso, altura, habilidades y estadísticas base, y permite escuchar su grito.
 
 Está hecha con **Kotlin**, **Jetpack Compose** (Material 3) y el patrón **MVVM**. La red usa **Retrofit** + **Gson**, y las imágenes se cargan con **Coil**. El layout se adapta al ancho de la pantalla: en teléfono muestra una columna, y en tablet o en horizontal pone los detalles a la izquierda y la imagen a la derecha, centrados.
 
@@ -84,18 +84,20 @@ data/
   repository/
     PokemonRepository.kt        Contrato que usa el ViewModel
     DefaultPokemonRepository.kt Implementación con Retrofit
-    PokemonException.kt         Errores del repositorio: Network / Server / Unknown
+    PokemonException.kt         Errores del repositorio: Network / NotFound / Server / Unknown
 model/
   Pokemon.kt, Sprites.kt,       DTOs: clases que Gson rellena con el JSON
   OtherSprites.kt, OfficialArtwork.kt,
-  Types.kt, Type.kt
+  Types.kt, Type.kt,
+  PokemonStat.kt, PokemonAbility.kt, Cries.kt, NamedResource.kt
 viewmodel/
   PokemonViewModel.kt           Estado + lógica + Factory
   PokemonUiState.kt             Estados de pantalla: Loading / Success / Error
   PokemonUi.kt                  Modelo listo para mostrar + conversión desde el DTO
+  PokemonSearch.kt              Normaliza lo que escribe el usuario para PokéAPI
 ui/
   screen/                       Pantallas y layout común
-  components/                   Imagen, detalles y etiqueta de tipo
+  components/                   Búsqueda, imagen, detalles, tipo, estadísticas y grito
   theme/                        Tema, colores y tipografía
   utils/Utils.kt                Clase de tamaño de ventana
   utils/UiText.kt               Texto sin resolver (recurso + argumentos)
@@ -221,6 +223,12 @@ data class OtherSprites(@SerializedName("official-artwork") val officialArtwork:
 data class OfficialArtwork(@SerializedName("front_default") val frontDefault: String? = null)
 data class Types(@SerializedName("slot") val slot: Int? = null, @SerializedName("type") val type: Type? = Type())
 data class Type(@SerializedName("name") val name: String? = null, @SerializedName("url") val url: String? = null)
+
+// Estadísticas, habilidades y grito (campos `stats`, `abilities` y `cries` de Pokemon).
+data class PokemonStat(@SerializedName("base_stat") val baseStat: Int? = null, @SerializedName("stat") val stat: NamedResource? = null)
+data class PokemonAbility(@SerializedName("ability") val ability: NamedResource? = null, @SerializedName("is_hidden") val isHidden: Boolean? = null)
+data class Cries(@SerializedName("latest") val latest: String? = null)  // URL de un .ogg
+data class NamedResource(@SerializedName("name") val name: String? = null, @SerializedName("url") val url: String? = null)
 ```
 
 Puntos clave:
@@ -229,6 +237,7 @@ Puntos clave:
 - **Todos los parámetros tienen valor por defecto.** Así Kotlin genera un constructor sin parámetros, Gson lo usa, y las claves que falten en el JSON conservan su valor por defecto.
 - **Los campos son nullable.** Gson no respeta la nulabilidad de Kotlin: si el JSON trae `"name": null`, asigna `null` aunque el tipo sea `String`, y la app falla después. Vale también para las listas: `"types": null` dejaría en `null` un `List<Types>` no nullable. Declararlos nullable obliga a manejar ese caso (`?.`, `?:`, `orEmpty()`), cosa que hace `toUi()` en el [paso 7](#paso-7-estado-de-la-ui).
 - La estructura anidada del JSON (`types[].type.name`) se reproduce con clases anidadas (`Types` → `Type`).
+- `NamedResource` representa el patrón `{"name": …, "url": …}` que PokéAPI usa para enlazar recursos (`stats[].stat`, `abilities[].ability`). `name` es un identificador en inglés con guiones (`special-attack`, `lightning-rod`).
 - `@SerializedName` también sirve para claves que no son nombres válidos en Kotlin, como `official-artwork` (lleva guion).
 - `imageUrl` es una propiedad calculada, sin campo propio, así que Gson la ignora. Prefiere la ilustración oficial (unos 475 px) al sprite `front_default` (96 px), que se ve borroso a 200 dp.
 
@@ -339,7 +348,8 @@ Las excepciones de Retrofit, OkHttp y Gson no salen de la capa de datos. `Defaul
 | Situación | Excepción original | La traduce a | Mensaje en pantalla |
 |---|---|---|---|
 | Sin conexión, timeout, DNS | `IOException` (OkHttp) | `PokemonException.Network` | "Sin conexión. Revisa tu red e inténtalo de nuevo." |
-| El servidor responde 404, 500… o sin cuerpo | Respuesta no exitosa | `PokemonException.Server(code)` | "El servidor respondió con error (404)." |
+| No existe ese nombre o número | Respuesta 404 | `PokemonException.NotFound` | "No existe ningún Pokémon «agumon»." |
+| El servidor responde 500… o sin cuerpo | Respuesta no exitosa | `PokemonException.Server(code)` | "El servidor respondió con error (500)." |
 | JSON con formato inesperado | `JsonSyntaxException` u otra (Gson) | `PokemonException.Unknown` | "Respuesta inesperada del servidor." |
 | La corrutina se cancela | `CancellationException` | Ninguna: se relanza | Ninguno. |
 
@@ -392,6 +402,7 @@ interface PokemonRepository {
 ```kotlin
 sealed class PokemonException(cause: Throwable? = null) : Exception(cause) {
     class Network(cause: Throwable) : PokemonException(cause)
+    class NotFound : PokemonException()
     class Server(val code: Int) : PokemonException()
     class Unknown(cause: Throwable) : PokemonException(cause)
 }
@@ -413,6 +424,7 @@ class DefaultPokemonRepository(
         } catch (e: Exception) {
             throw PokemonException.Unknown(e)
         }
+        if (response.code() == HTTP_NOT_FOUND) throw PokemonException.NotFound()
         return response.body()?.takeIf { response.isSuccessful }
             ?: throw PokemonException.Server(response.code())
     }
@@ -420,7 +432,8 @@ class DefaultPokemonRepository(
 ```
 
 - Si la respuesta es correcta y tiene cuerpo, devuelve el `Pokemon`.
-- Si no, lanza `PokemonException.Server` con el código HTTP, para que el ViewModel pueda mostrarlo.
+- Si responde 404, lanza `PokemonException.NotFound`: el nombre o número buscado no existe, y el ViewModel muestra un mensaje propio.
+- Con cualquier otro error, lanza `PokemonException.Server` con el código HTTP, para que el ViewModel pueda mostrarlo.
 - Los errores de red y de Gson se traducen a `Network` y `Unknown`. Así el ViewModel no importa nada de Retrofit (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)).
 - **¿Por qué una interfaz?** El ViewModel depende del contrato, no de Retrofit. En sus tests se le pasa un `FakePokemonRepository`, sin red ni respuestas HTTP falsas.
 
@@ -453,16 +466,22 @@ data class PokemonUi(
     val imageUrl: String?,      // artwork oficial o, si falta, el sprite
     val types: List<PokemonTypeUi>,
     val weight: UiText,         // R.string.weight_value con 6.0, o "—"
-    val height: UiText          // R.string.height_value con 0.4, o "—"
+    val height: UiText,         // R.string.height_value con 0.4, o "—"
+    val stats: List<PokemonStatUi>,   // PS, Ataque… con valor y proporción de la barra
+    val abilities: List<UiText>,      // "Static", "Lightning rod (oculta)"
+    val cryUrl: String?               // URL del grito (.ogg)
 )
 
 data class PokemonTypeUi(val key: String, val label: UiText)  // "electric", "Eléctrico"
+data class PokemonStatUi(val label: UiText, val value: Int, val fraction: Float)  // "Ataque", 55, 0.22
 ```
 
 - `formatTenths` divide por 10 (PokéAPI usa hectogramos y decímetros) y devuelve el recurso `%1$.1f kg` con ese número. Si falta un dato devuelve `—`.
 - **¿Por qué `UiText` y no un `String` ya formateado?** El separador decimal depende del idioma (`6,0 kg` en español, `6.0 kg` en inglés). Android lo aplica al resolver el recurso en la View, con el idioma vigente. Si el ViewModel guardara el texto ya formateado, sobreviviría a un cambio de idioma con el separador antiguo.
 - `formatTitle` maneja la falta de número o de nombre.
 - `typeUi` traduce el tipo con su recurso (`R.string.type_electric`). Un tipo desconocido queda capitalizado. `key` es el nombre en inglés; la View lo usa para elegir el color.
+- `statUi` traduce la estadística (`R.string.stat_attack`) y calcula `fraction = valor / 255`, la estadística base más alta que existe, así las barras son comparables entre Pokémon. Una estadística sin valor se omite.
+- `abilityUi` convierte el identificador en texto (`lightning-rod` → "Lightning rod") y marca las ocultas con "(oculta)". Las habilidades quedan en inglés: PokéAPI solo da su traducción en `/ability/{id}`, que sería una petición más por habilidad.
 
 **`viewmodel/PokemonUiState.kt`: los tres estados de la pantalla.**
 
@@ -493,13 +512,22 @@ class PokemonViewModel(
 
     private var loadJob: Job? = null
 
-    init { loadPokemon(savedStateHandle[KEY_LAST_ID] ?: randomId()) }
+    init {
+        val savedId: Int? = savedStateHandle[KEY_LAST_ID]
+        loadPokemon((savedId ?: randomId()).toString())
+    }
 
-    fun getRandomPokemon() { loadPokemon(randomId()) }
+    fun getRandomPokemon() { loadPokemon(randomId().toString()) }
+
+    fun searchPokemon(query: String) {
+        val idOrName = normalizeQuery(query)   // "Mr. Mime" → "mr-mime", "025" → "25"
+        if (idOrName.isEmpty()) return
+        loadPokemon(idOrName)
+    }
 
     private fun randomId(): Int = random.nextInt(1, 1026)
 
-    private fun loadPokemon(id: Int) {
+    private fun loadPokemon(idOrName: String) {
         if (loadJob?.isActive == true) return
 
         val previous = (_uiState.value as? PokemonUiState.Success)?.pokemon
@@ -507,17 +535,18 @@ class PokemonViewModel(
         loadJob = viewModelScope.launch {
             _uiState.value = PokemonUiState.Loading(previous)
             _uiState.value = try {
-                val pokemon = repository.getPokemon(id.toString())
-                savedStateHandle[KEY_LAST_ID] = id
+                val pokemon = repository.getPokemon(idOrName)
+                pokemon.id?.let { savedStateHandle[KEY_LAST_ID] = it }
                 PokemonUiState.Success(pokemon.toUi())
             } catch (e: PokemonException) {
-                PokemonUiState.Error(e.toMessage())
+                PokemonUiState.Error(e.toMessage(idOrName))
             }
         }
     }
 
-    private fun PokemonException.toMessage(): UiText = when (this) {
+    private fun PokemonException.toMessage(idOrName: String): UiText = when (this) {
         is PokemonException.Network -> UiText.Resource(R.string.error_network)
+        is PokemonException.NotFound -> UiText.Resource(R.string.error_not_found, listOf(idOrName))
         is PokemonException.Server -> UiText.Resource(R.string.error_server, listOf(code))
         is PokemonException.Unknown -> UiText.Resource(R.string.error_unknown)
     }
@@ -542,7 +571,8 @@ class PokemonViewModel(
 - **`loadJob`**: guarda la petición en curso. Si llega otra llamada antes de que termine, se ignora. La UI además desactiva el botón mientras carga.
 - **`random`**: también se inyecta. La app usa `Random.Default`; un test pasa `Random(42)` y sabe de antemano qué IDs se pedirán, porque dos `Random` con la misma semilla dan la misma secuencia.
 - **`previous`**: antes de cargar, guarda el Pokémon que se está mostrando y lo pasa a `Loading`, para que la View lo mantenga en pantalla.
-- **`SavedStateHandle`**: el `ViewModel` sobrevive a una rotación, pero no a que Android cierre la app en segundo plano para liberar memoria. `SavedStateHandle` sí sobrevive: guarda el ID del último Pokémon cargado y, al volver, `init` pide ese mismo en lugar de uno aleatorio. Solo se guarda un ID que cargó bien. Sirve para datos pequeños como un ID, no para el Pokémon completo.
+- **`SavedStateHandle`**: el `ViewModel` sobrevive a una rotación, pero no a que Android cierre la app en segundo plano para liberar memoria. `SavedStateHandle` sí sobrevive: guarda el ID del último Pokémon cargado y, al volver, `init` pide ese mismo en lugar de uno aleatorio. Solo se guarda un ID que cargó bien, y se toma de la respuesta (`pokemon.id`), así también funciona si se buscó por nombre. Sirve para datos pequeños como un ID, no para el Pokémon completo.
+- **`searchPokemon`**: recibe el texto tal como lo escribió el usuario. `normalizeQuery` (`viewmodel/PokemonSearch.kt`) lo convierte al formato de PokéAPI: minúsculas, sin tildes, sin puntos ni apóstrofos, guiones en vez de espacios y sin ceros a la izquierda (PokéAPI responde 404 a `025`). Un texto vacío no lanza ninguna petición. Comparte `loadPokemon` con la carga aleatoria, así hereda el bloqueo de peticiones simultáneas y el `Loading(previous)`.
 - `viewModelScope.launch` lanza una corrutina que se cancela sola si el ViewModel se destruye. Aquí se llama a la función `suspend` del repositorio.
 - **`toUi()`**: convierte el DTO en un `PokemonUi` listo para mostrar. La View nunca ve el `Pokemon` de Gson.
 - **Un solo `catch`**: el repositorio solo lanza `PokemonException`, y `toMessage()` elige el recurso de `strings.xml` para cada tipo. Al ser `sealed`, el `when` no compila si se añade un tipo nuevo sin mensaje. El ViewModel no importa nada de Retrofit (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)).
@@ -575,8 +605,9 @@ fun PokemonScreen(
 
 `collectAsStateWithLifecycle()` (de `lifecycle-runtime-compose`) recompone la UI cada vez que cambia el estado, y deja de recolectar cuando la app pasa a segundo plano.
 
-**`ui/screen/PokemonStateLayout.kt`**: layout común. Resuelve el `when (uiState)` y pinta el botón, que se desactiva mientras el estado es `Loading`:
+**`ui/screen/PokemonStateLayout.kt`**: layout común. Pinta la barra de búsqueda arriba, resuelve el `when (uiState)` y pinta el botón aleatorio. La búsqueda y el botón se desactivan mientras el estado es `Loading`:
 
+- **Búsqueda** (`PokemonSearchBar`): campo de texto y botón "Buscar". El texto que se escribe es estado de la UI (`rememberSaveable`, sobrevive a la rotación); solo se envía con `onSearch` al pulsar "Buscar" o la tecla de búsqueda del teclado, que además se oculta. Normalizarlo es tarea del ViewModel.
 - **Carga** sin Pokémon previo: solo el spinner. Con Pokémon previo: el contenido anterior atenuado (`alpha(0.4f)`) y el spinner encima. Carga y éxito usan el mismo contenedor, así la pantalla no cambia de tamaño al terminar.
 - **Error**: el mensaje en rojo, con `liveRegion` para que los lectores de pantalla lo anuncien en cuanto aparece.
 - La columna tiene `verticalScroll`, para que en pantallas bajas (teléfono en horizontal) el botón siga siendo alcanzable.
@@ -584,7 +615,7 @@ fun PokemonScreen(
 Cada pantalla solo aporta cómo se ve un Pokémon cargado:
 
 ```kotlin
-PokemonStateLayout(uiState = uiState, onRandomClick = onRandomClick, modifier = modifier) { pokemon ->
+PokemonStateLayout(uiState, onRandomClick, onSearch, modifier) { pokemon ->
     // Layout propio de cada pantalla con PokemonImage y PokemonDetails
 }
 ```
@@ -595,7 +626,9 @@ PokemonStateLayout(uiState = uiState, onRandomClick = onRandomClick, modifier = 
 **Componentes (`ui/components/`)**:
 
 - `PokemonImage`: `SubcomposeAsyncImage` de Coil, con spinner mientras carga y el logo como imagen de error. Recibe `pokemon.imageUrl`: la ilustración oficial o, si no existe, el sprite.
-- `PokemonDetails`: recibe un `PokemonUi` y muestra el título, los tipos, y el peso y la altura. No formatea nada: solo resuelve los textos con `asString()` y `stringResource()`. El título lleva `semantics { heading() }`, para que los lectores de pantalla puedan saltar directo a él.
+- `PokemonDetails`: recibe un `PokemonUi` y muestra el título, el botón del grito, los tipos, el peso y la altura, las habilidades y las estadísticas. No formatea nada: solo resuelve los textos con `asString()` y `stringResource()`. El título lleva `semantics { heading() }`, para que los lectores de pantalla puedan saltar directo a él.
+- `PokemonStats`: una fila por estadística con nombre, valor y `LinearProgressIndicator`. Cada fila se lee como un solo elemento ("Ataque 55"), y la barra se oculta a los lectores de pantalla (`clearAndSetSemantics {}`) para que no anuncien un porcentaje confuso.
+- `PokemonCryButton`: reproduce el `.ogg` con `MediaPlayer`. `prepareAsync()` lo descarga sin bloquear la UI y `start()` se llama al terminar. Un `DisposableEffect(url)` libera el reproductor al cambiar de Pokémon o salir de la pantalla. Reproducir audio es un efecto de la UI, como cargar la imagen con Coil, así que no pasa por el ViewModel. El grito no usa la caché de OkHttp.
 - `PokemonTypePill`: recibe un `PokemonTypeUi`. Muestra el nombre ya traducido y elige el color con `PokemonTypeColors` según `key`. El texto es blanco o negro según el fondo: `readableTextColor` elige el que tenga más contraste con la fórmula de WCAG, así todos los tipos superan 4.5:1.
 
 El logo de la barra superior tiene `contentDescription = null`: es decorativo, porque el título de al lado ya dice el nombre de la app.
@@ -664,9 +697,10 @@ Gracias a la inyección por constructor, cada capa se prueba sin red y con una p
 | `FakePokemonRepository.kt` | No es un test: es un `PokemonRepository` falso para los tests del ViewModel. Devuelve un `Pokemon` o lanza una `PokemonException`. |
 | `MainDispatcherRule.kt` | Regla de JUnit que reemplaza `Dispatchers.Main`, que no existe fuera de Android y que `viewModelScope` necesita. |
 | `data/remote/OfflineCacheInterceptorTest.kt` | Con red pasa la respuesta; sin red usa la caché (`only-if-cached`, hasta 30 días); sin red ni copia relanza el `IOException` original. Usa un `Interceptor.Chain` falso. |
-| `data/repository/PokemonRepositoryTest.kt` | Respuesta correcta, y la traducción de cada fallo: 404 y 200 sin cuerpo a `Server`, error de red a `Network`, JSON ilegible a `Unknown`. |
-| `viewmodel/PokemonViewModelTest.kt` | Paso de `Loading` a `Success`, ID entre 1 y 1025, IDs exactos con un `Random` con semilla, Pokémon anterior durante la carga, ID recuperado de `SavedStateHandle`, mensaje para cada `PokemonException`, peticiones simultáneas ignoradas y reintento. |
-| `viewmodel/PokemonUiTest.kt` | Conversión a `PokemonUi`: peso y altura divididos por 10, datos faltantes, nulls explícitos de Gson, título y traducción de tipos. |
+| `data/repository/PokemonRepositoryTest.kt` | Respuesta correcta, y la traducción de cada fallo: 404 a `NotFound`, 500 y 200 sin cuerpo a `Server`, error de red a `Network`, JSON ilegible a `Unknown`. |
+| `viewmodel/PokemonViewModelTest.kt` | Paso de `Loading` a `Success`, ID entre 1 y 1025, IDs exactos con un `Random` con semilla, Pokémon anterior durante la carga, ID recuperado de `SavedStateHandle`, búsqueda normalizada, búsqueda vacía ignorada, mensaje de "no encontrado" con lo buscado, mensaje para cada `PokemonException`, peticiones simultáneas ignoradas y reintento. |
+| `viewmodel/PokemonSearchTest.kt` | `normalizeQuery`: minúsculas, ceros a la izquierda, tildes, puntos, apóstrofos, espacios y texto vacío. |
+| `viewmodel/PokemonUiTest.kt` | Conversión a `PokemonUi`: peso y altura divididos por 10, datos faltantes, nulls explícitos de Gson, título, traducción de tipos y estadísticas, barra respecto a 255, habilidades ocultas, y lectura de `stats`/`abilities`/`cries` con las claves reales del JSON (`base_stat`, `is_hidden`). |
 | `ui/components/PokemonTypePillContrastTest.kt` | Todos los tipos cumplen el contraste mínimo de WCAG AA. |
 
 Los tests comparan IDs de recurso (`R.string.error_network`), no textos. Por eso no se rompen si cambia la redacción de un mensaje.
@@ -723,7 +757,8 @@ Para escribir estos tests hace falta la dependencia `kotlinx-coroutines-test` (`
 
 | Estado | Qué comprueba |
 |---|---|
-| `Success` | Título, tipo traducido, peso y botón activo. El título es un encabezado (`isHeading()`). |
+| `Success` | Título, tipo traducido, peso y botón activo. El título es un encabezado (`isHeading()`). Botón del grito, habilidades y estadísticas (cada fila se lee con nombre y valor juntos). |
+| Búsqueda | Envía el texto escrito tal cual con `onSearch`. "Buscar" se desactiva sin texto y durante la carga. |
 | `Loading()` | Solo el spinner, sin Pokémon, y el botón desactivado. |
 | `Loading(previous)` | El Pokémon anterior sigue visible, con spinner, y el botón desactivado. |
 | `Error` | Mensaje visible, anunciado con `liveRegion`, y el botón llama a `onRandomClick`. |

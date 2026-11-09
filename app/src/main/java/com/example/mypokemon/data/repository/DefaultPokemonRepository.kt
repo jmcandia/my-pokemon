@@ -4,6 +4,7 @@ import com.example.mypokemon.data.remote.ApiService
 import com.example.mypokemon.model.Pokemon
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
+import java.net.HttpURLConnection.HTTP_NOT_FOUND
 
 /**
  * Implementación de `PokemonRepository` que pide los datos a PokéAPI.
@@ -34,7 +35,11 @@ class DefaultPokemonRepository(
             throw PokemonException.Unknown(e)
         }
 
-        // El servidor respondió con error (404, 500…) o sin cuerpo.
+        // 404: el nombre o número buscado no existe. Se distingue del resto de
+        // errores para mostrar un mensaje propio.
+        if (response.code() == HTTP_NOT_FOUND) throw PokemonException.NotFound()
+
+        // El servidor respondió con otro error (500…) o sin cuerpo.
         return response.body()?.takeIf { response.isSuccessful }
             ?: throw PokemonException.Server(response.code())
     }

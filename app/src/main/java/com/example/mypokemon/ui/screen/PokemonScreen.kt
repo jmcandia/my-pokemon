@@ -28,7 +28,8 @@ import com.example.mypokemon.viewmodel.PokemonViewModel
 
 /**
  * Pantalla principal. Es el único composable que conoce el ViewModel: lee su estado
- * y se lo pasa a las pantallas, junto con la acción para pedir otro Pokémon.
+ * y se lo pasa a las pantallas, junto con las acciones para pedir un Pokémon
+ * aleatorio o buscarlo por nombre o número.
  *
  * `viewModel(factory = ...)` reutiliza el mismo ViewModel tras una rotación; la
  * `Factory` le inyecta el repositorio real.
@@ -74,6 +75,7 @@ fun PokemonScreen(
                 PokemonCompactScreen(
                     uiState = uiState,
                     onRandomClick = viewModel::getRandomPokemon,
+                    onSearch = viewModel::searchPokemon,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -83,6 +85,7 @@ fun PokemonScreen(
                 PokemonMediumScreen(
                     uiState = uiState,
                     onRandomClick = viewModel::getRandomPokemon,
+                    onSearch = viewModel::searchPokemon,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
