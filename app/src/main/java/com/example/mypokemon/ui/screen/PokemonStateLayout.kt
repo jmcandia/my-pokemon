@@ -1,12 +1,15 @@
 package com.example.mypokemon.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.mypokemon.R
@@ -38,18 +45,30 @@ fun PokemonStateLayout(
     modifier: Modifier = Modifier,
     successContent: @Composable (PokemonUi) -> Unit
 ) {
+    // Con scroll vertical: en pantallas bajas (teléfono en horizontal) el contenido
+    // no cabe, y sin scroll el botón quedaría fuera de la pantalla.
     Column(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
         when (uiState) {
             is PokemonUiState.Loading -> {
-                CircularProgressIndicator()
+                val previous = uiState.previous
+                if (previous == null) {
+                    // Primera carga: todavía no hay nada que mostrar.
+                    CircularProgressIndicator()
+                } else {
+                    // Mantiene el Pokémon anterior atenuado bajo el spinner, para que
+                    // el layout no salte en cada búsqueda.
+                    PokemonContent(previous, isLoading = true, content = successContent)
+                }
             }
 
             is PokemonUiState.Success -> {
-                successContent(uiState.pokemon)
+                PokemonContent(uiState.pokemon, isLoading = false, content = successContent)
             }
 
             is PokemonUiState.Error -> {
@@ -57,7 +76,9 @@ fun PokemonStateLayout(
                     text = uiState.message.asString(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(10.dp, 5.dp),
+                        .padding(10.dp, 5.dp)
+                        // Los lectores de pantalla anuncian el error en cuanto aparece.
+                        .semantics { liveRegion = LiveRegionMode.Polite },
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -73,6 +94,30 @@ fun PokemonStateLayout(
             enabled = uiState !is PokemonUiState.Loading
         ) {
             Text(text = stringResource(R.string.random_button))
+        }
+    }
+}
+
+/**
+ * Contenido de un Pokémon cargado. Mientras llega el siguiente (`isLoading`), lo
+ * atenúa y pone un spinner encima. Se usa el mismo contenedor en ambos casos para
+ * que la pantalla no cambie de tamaño al terminar la carga.
+ */
+@Composable
+private fun PokemonContent(
+    pokemon: PokemonUi,
+    isLoading: Boolean,
+    content: @Composable (PokemonUi) -> Unit
+) {
+    Box(contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.alpha(if (isLoading) 0.4f else 1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            content(pokemon)
+        }
+        if (isLoading) {
+            CircularProgressIndicator()
         }
     }
 }

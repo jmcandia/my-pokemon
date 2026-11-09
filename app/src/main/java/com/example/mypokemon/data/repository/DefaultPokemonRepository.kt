@@ -9,7 +9,7 @@ import java.io.IOException
  * Implementación de `PokemonRepository` que pide los datos a PokéAPI.
  *
  * Recibe `ApiService` por constructor (inyección de dependencias). En la app se le
- * pasa `RetrofitInstance.api` desde `AppContainer`; en un test, una API falsa.
+ * pasa el `ApiService` que crea `AppContainer`; en un test, una API falsa.
  */
 class DefaultPokemonRepository(
     private val api: ApiService

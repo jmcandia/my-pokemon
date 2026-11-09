@@ -1,0 +1,42 @@
+<resources>
+    <!-- Traducción al inglés de values/strings.xml. Android la usa si el idioma del
+         dispositivo es inglés. app_name no se traduce. -->
+
+    <!-- Pantalla principal -->
+    <string name="random_button">Find a random Pokémon!</string>
+    <string name="image_unavailable">Image not available</string>
+
+    <!-- Detalles del Pokémon -->
+    <string name="pokemon_title">#%1$d - %2$s</string>
+    <string name="pokemon_title_unknown">#%1$d - Unknown Pokémon</string>
+    <string name="pokemon_unknown">Unknown Pokémon</string>
+    <string name="pokemon_weight">Weight: %1$s</string>
+    <string name="pokemon_height">Height: %1$s</string>
+    <string name="weight_value">%1$.1f kg</string>
+    <string name="height_value">%1$.1f m</string>
+
+    <!-- Errores -->
+    <string name="error_network">No connection. Check your network and try again.</string>
+    <string name="error_server">The server responded with an error (%1$d).</string>
+    <string name="error_unknown">Unexpected response from the server.</string>
+
+    <!-- Tipos de Pokémon -->
+    <string name="type_normal">Normal</string>
+    <string name="type_fire">Fire</string>
+    <string name="type_water">Water</string>
+    <string name="type_electric">Electric</string>
+    <string name="type_grass">Grass</string>
+    <string name="type_ice">Ice</string>
+    <string name="type_fighting">Fighting</string>
+    <string name="type_poison">Poison</string>
+    <string name="type_ground">Ground</string>
+    <string name="type_flying">Flying</string>
+    <string name="type_psychic">Psychic</string>
+    <string name="type_bug">Bug</string>
+    <string name="type_rock">Rock</string>
+    <string name="type_ghost">Ghost</string>
+    <string name="type_dragon">Dragon</string>
+    <string name="type_dark">Dark</string>
+    <string name="type_steel">Steel</string>
+    <string name="type_fairy">Fairy</string>
+</resources>

@@ -1,5 +1,6 @@
 package com.example.mypokemon.viewmodel
 
+import androidx.lifecycle.SavedStateHandle
 import com.example.mypokemon.FakePokemonRepository
 import com.example.mypokemon.MainDispatcherRule
 import com.example.mypokemon.R
@@ -8,12 +9,14 @@ import com.example.mypokemon.model.Pokemon
 import com.example.mypokemon.ui.utils.UiText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.IOException
+import kotlin.random.Random
 
 class PokemonViewModelTest {
 
@@ -21,12 +24,19 @@ class PokemonViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val pikachu = Pokemon(id = 25, name = "pikachu")
+    private val bulbasaur = Pokemon(id = 1, name = "bulbasaur")
+
+    private fun createViewModel(
+        repository: FakePokemonRepository,
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        random: Random = Random.Default
+    ) = PokemonViewModel(repository, savedStateHandle, random)
 
     @Test
     fun `empieza en Loading y pasa a Success con el Pokémon listo para mostrar`() = runTest {
-        val viewModel = PokemonViewModel(FakePokemonRepository { pikachu })
+        val viewModel = createViewModel(FakePokemonRepository { pikachu })
 
-        assertEquals(PokemonUiState.Loading, viewModel.uiState.value)
+        assertEquals(PokemonUiState.Loading(), viewModel.uiState.value)
         advanceUntilIdle()
         assertEquals(PokemonUiState.Success(pikachu.toUi()), viewModel.uiState.value)
     }
@@ -34,7 +44,7 @@ class PokemonViewModelTest {
     @Test
     fun `pide un ID entre 1 y 1025`() = runTest {
         val repository = FakePokemonRepository { pikachu }
-        PokemonViewModel(repository)
+        createViewModel(repository)
         advanceUntilIdle()
 
         val id = repository.requestedIds.single().toInt()
@@ -42,8 +52,87 @@ class PokemonViewModelTest {
     }
 
     @Test
+    fun `pide el ID que da el Random inyectado`() = runTest {
+        // Dos `Random` con la misma semilla dan la misma secuencia de números.
+        val expectedIds = Random(SEED).let { r -> List(2) { r.nextInt(1, 1026).toString() } }
+        val repository = FakePokemonRepository { pikachu }
+        val viewModel = createViewModel(repository, random = Random(SEED))
+        advanceUntilIdle()
+
+        viewModel.getRandomPokemon()
+        advanceUntilIdle()
+
+        assertEquals(expectedIds, repository.requestedIds)
+    }
+
+    @Test
+    fun `muestra el Pokémon anterior mientras carga el siguiente`() = runTest {
+        val repository = FakePokemonRepository { pikachu }
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        repository.handler = {
+            delay(1_000) // Tiempo virtual: simula una respuesta lenta.
+            bulbasaur
+        }
+        viewModel.getRandomPokemon()
+        runCurrent() // Arranca la petición, pero no deja pasar el `delay`.
+
+        assertEquals(PokemonUiState.Loading(previous = pikachu.toUi()), viewModel.uiState.value)
+        advanceUntilIdle()
+        assertEquals(PokemonUiState.Success(bulbasaur.toUi()), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `tras un error la carga siguiente no tiene Pokémon anterior`() = runTest {
+        val repository = FakePokemonRepository {
+            throw PokemonException.Network(IOException("sin red"))
+        }
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        repository.handler = {
+            delay(1_000)
+            pikachu
+        }
+        viewModel.getRandomPokemon()
+        runCurrent()
+
+        assertEquals(PokemonUiState.Loading(previous = null), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `recupera el último Pokémon si Android cerró la app`() = runTest {
+        // El `SavedStateHandle` es lo que Android conserva al cerrar el proceso.
+        val savedStateHandle = SavedStateHandle()
+        val firstRepository = FakePokemonRepository { pikachu }
+        createViewModel(firstRepository, savedStateHandle)
+        advanceUntilIdle()
+        val shownId = firstRepository.requestedIds.single()
+
+        // Un ViewModel nuevo con el mismo estado guardado pide el mismo ID.
+        val secondRepository = FakePokemonRepository { pikachu }
+        createViewModel(secondRepository, savedStateHandle)
+        advanceUntilIdle()
+
+        assertEquals(listOf(shownId), secondRepository.requestedIds)
+    }
+
+    @Test
+    fun `no guarda el ID de una petición fallida`() = runTest {
+        val savedStateHandle = SavedStateHandle()
+        createViewModel(
+            FakePokemonRepository { throw PokemonException.Server(500) },
+            savedStateHandle
+        )
+        advanceUntilIdle()
+
+        assertTrue(savedStateHandle.keys().isEmpty())
+    }
+
+    @Test
     fun `muestra mensaje de conexión si falla la red`() = runTest {
-        val viewModel = PokemonViewModel(
+        val viewModel = createViewModel(
             FakePokemonRepository { throw PokemonException.Network(IOException("timeout")) }
         )
         advanceUntilIdle()
@@ -56,7 +145,7 @@ class PokemonViewModelTest {
 
     @Test
     fun `muestra el código si el servidor responde con error`() = runTest {
-        val viewModel = PokemonViewModel(
+        val viewModel = createViewModel(
             FakePokemonRepository { throw PokemonException.Server(500) }
         )
         advanceUntilIdle()
@@ -69,7 +158,7 @@ class PokemonViewModelTest {
 
     @Test
     fun `muestra mensaje genérico si la respuesta no se puede leer`() = runTest {
-        val viewModel = PokemonViewModel(
+        val viewModel = createViewModel(
             FakePokemonRepository { throw PokemonException.Unknown(IllegalStateException()) }
         )
         advanceUntilIdle()
@@ -86,7 +175,7 @@ class PokemonViewModelTest {
             delay(1_000) // Tiempo virtual: simula una respuesta lenta.
             pikachu
         }
-        val viewModel = PokemonViewModel(repository) // `init` lanza la primera petición.
+        val viewModel = createViewModel(repository) // `init` lanza la primera petición.
 
         viewModel.getRandomPokemon()
         viewModel.getRandomPokemon()
@@ -104,7 +193,7 @@ class PokemonViewModelTest {
         val repository = FakePokemonRepository {
             throw PokemonException.Network(IOException("sin red"))
         }
-        val viewModel = PokemonViewModel(repository)
+        val viewModel = createViewModel(repository)
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value is PokemonUiState.Error)
 
@@ -113,5 +202,9 @@ class PokemonViewModelTest {
         advanceUntilIdle()
 
         assertEquals(PokemonUiState.Success(pikachu.toUi()), viewModel.uiState.value)
+    }
+
+    private companion object {
+        const val SEED = 42
     }
 }

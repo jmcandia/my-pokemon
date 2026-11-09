@@ -7,8 +7,9 @@ import com.example.mypokemon.ui.utils.UiText
  * los tres casos o no compila.
  */
 sealed class PokemonUiState {
-    // Petición en curso.
-    object Loading : PokemonUiState()
+    // Petición en curso. `previous` es el Pokémon que se mostraba antes, si había
+    // uno: la UI lo mantiene atenuado bajo el spinner para que la pantalla no salte.
+    data class Loading(val previous: PokemonUi? = null) : PokemonUiState()
     // Petición correcta: contiene el Pokémon listo para mostrar.
     data class Success(val pokemon: PokemonUi) : PokemonUiState()
     // Petición fallida: contiene el mensaje que se muestra al usuario.

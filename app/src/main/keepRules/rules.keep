@@ -10,3 +10,9 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# DTOs de Gson: Gson los crea y rellena por reflexión, así que R8 no debe borrar
+# su constructor vacío ni renombrar o eliminar sus campos. Hoy `packageScope` (en
+# app/build.gradle.kts) deja el código de la app fuera de R8; esta regla los
+# protege si ese alcance se amplía.
+-keep class com.example.mypokemon.model.** { *; }

@@ -51,7 +51,9 @@ fun PokemonScreen(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.logo),
-                            contentDescription = stringResource(R.string.logo_description),
+                            // Decorativo: el título de al lado ya dice el nombre de la
+                            // app, así que los lectores de pantalla lo saltan.
+                            contentDescription = null,
                             modifier = Modifier.size(72.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))

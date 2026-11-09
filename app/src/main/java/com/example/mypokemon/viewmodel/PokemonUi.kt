@@ -1,9 +1,9 @@
 package com.example.mypokemon.viewmodel
 
+import androidx.annotation.StringRes
 import com.example.mypokemon.R
 import com.example.mypokemon.model.Pokemon
 import com.example.mypokemon.ui.utils.UiText
-import java.util.Locale
 
 /**
  * Pokémon listo para mostrar: la UI lo pinta tal cual, sin formatear ni revisar
@@ -16,9 +16,11 @@ data class PokemonUi(
     // URL del artwork oficial o, si falta, del sprite básico.
     val imageUrl: String?,
     val types: List<PokemonTypeUi>,
-    // Peso y altura con unidad y el separador decimal del idioma ("6,0 kg"), o "—".
-    val weight: String,
-    val height: String
+    // Peso y altura ("6,0 kg"), o "—". Son `UiText` y no `String` para que el número
+    // se formatee al dibujar, con el idioma vigente: si el usuario cambia el idioma,
+    // el ViewModel sobrevive pero el separador decimal se actualiza.
+    val weight: UiText,
+    val height: UiText
 )
 
 /** Tipo de un Pokémon, listo para la pill. */
@@ -31,19 +33,15 @@ data class PokemonTypeUi(
 
 private const val MISSING = "—"
 
-/**
- * Convierte el DTO de red en el modelo de UI.
- *
- * `locale` decide el separador decimal del peso y la altura. Se pasa como parámetro
- * para poder testear la conversión con un idioma fijo.
- */
-internal fun Pokemon.toUi(locale: Locale = Locale.getDefault()): PokemonUi = PokemonUi(
+/** Convierte el DTO de red en el modelo de UI. */
+internal fun Pokemon.toUi(): PokemonUi = PokemonUi(
     title = formatTitle(id, name),
     imageUrl = imageUrl,
-    // Si un tipo llega sin nombre, se muestra como "normal".
-    types = types.map { typeUi(it.type?.name ?: "normal") },
-    weight = formatTenths(weight, "kg", locale),
-    height = formatTenths(height, "m", locale)
+    // Sin lista de tipos no se muestra ninguno. Si un tipo llega sin nombre, se
+    // muestra como "normal".
+    types = types.orEmpty().map { typeUi(it.type?.name ?: "normal") },
+    weight = formatTenths(weight, R.string.weight_value),
+    height = formatTenths(height, R.string.height_value)
 )
 
 /** Título "#25 - Pikachu". Maneja la falta de número, de nombre o de ambos. */
@@ -60,16 +58,13 @@ internal fun formatTitle(pokemonId: Int?, name: String?): UiText {
 
 /**
  * PokéAPI da el peso en hectogramos y la altura en decímetros: se divide por 10 para
- * obtener kg y m. Usa el separador decimal de `locale` ("6,0 kg" en español). Si
- * falta el valor, devuelve "—".
+ * obtener kg y m. `formatRes` es un recurso con formato `%1$.1f`: al resolverlo, la
+ * UI usa el separador decimal del idioma ("6,0 kg" en español). Si falta el valor,
+ * devuelve "—".
  */
-internal fun formatTenths(
-    value: Int?,
-    unit: String,
-    locale: Locale = Locale.getDefault()
-): String {
-    if (value == null) return MISSING
-    return String.format(locale, "%.1f %s", value / 10.0, unit)
+internal fun formatTenths(value: Int?, @StringRes formatRes: Int): UiText {
+    if (value == null) return UiText.Plain(MISSING)
+    return UiText.Resource(formatRes, listOf(value / 10.0))
 }
 
 /** Traduce el tipo de PokéAPI al español. Un tipo desconocido queda capitalizado. */

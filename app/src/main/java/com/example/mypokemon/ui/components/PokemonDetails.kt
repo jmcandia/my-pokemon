@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.mypokemon.R
 import com.example.mypokemon.ui.utils.asString
@@ -27,6 +29,8 @@ fun PokemonDetails(pokemon: PokemonUi) {
     ) {
         Text(
             text = pokemon.title.asString(),
+            // Encabezado: los lectores de pantalla permiten saltar directo a él.
+            modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -47,8 +51,8 @@ fun PokemonDetails(pokemon: PokemonUi) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = stringResource(R.string.pokemon_weight, pokemon.weight))
-            Text(text = stringResource(R.string.pokemon_height, pokemon.height))
+            Text(text = stringResource(R.string.pokemon_weight, pokemon.weight.asString()))
+            Text(text = stringResource(R.string.pokemon_height, pokemon.height.asString()))
         }
     }
 }

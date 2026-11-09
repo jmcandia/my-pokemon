@@ -79,7 +79,8 @@ PokemonApplication.kt           Crea el AppContainer al arrancar la app
 data/
   AppContainer.kt               Contenedor de dependencias (inyección manual)
   remote/ApiService.kt          Interfaz Retrofit (endpoints)
-  remote/RetrofitInstance.kt    Configuración de Retrofit (singleton)
+  remote/RetrofitInstance.kt    Configuración de Retrofit y OkHttp (con caché HTTP)
+  remote/OfflineCacheInterceptor.kt  Sin red, responde con la copia en caché
   repository/
     PokemonRepository.kt        Contrato que usa el ViewModel
     DefaultPokemonRepository.kt Implementación con Retrofit
@@ -98,7 +99,8 @@ ui/
   theme/                        Tema, colores y tipografía
   utils/Utils.kt                Clase de tamaño de ventana
   utils/UiText.kt               Texto sin resolver (recurso + argumentos)
-res/values/strings.xml          Todos los textos de la app
+res/values/strings.xml          Todos los textos de la app (español, idioma por defecto)
+res/values-en/strings.xml       Traducción al inglés
 ```
 
 ---
@@ -204,7 +206,7 @@ data class Pokemon(
     @SerializedName("height") val height: Int? = null,   // decímetros
     @SerializedName("weight") val weight: Int? = null,   // hectogramos
     @SerializedName("sprites") val sprites: Sprites? = Sprites(),
-    @SerializedName("types") val types: ArrayList<Types> = arrayListOf()
+    @SerializedName("types") val types: List<Types>? = null
 ) {
     // Ilustración oficial si existe; si no, el sprite pixel art.
     val imageUrl: String?
@@ -225,7 +227,7 @@ Puntos clave:
 
 - `@SerializedName("front_default")` enlaza la clave del JSON (snake_case) con la propiedad Kotlin (`frontDefault`).
 - **Todos los parámetros tienen valor por defecto.** Así Kotlin genera un constructor sin parámetros, Gson lo usa, y las claves que falten en el JSON conservan su valor por defecto.
-- **Los campos son nullable.** Gson no respeta la nulabilidad de Kotlin: si el JSON trae `"name": null`, asigna `null` aunque el tipo sea `String`, y la app falla después. Declararlos nullable obliga a la UI a manejar ese caso (`?.`, `?:`).
+- **Los campos son nullable.** Gson no respeta la nulabilidad de Kotlin: si el JSON trae `"name": null`, asigna `null` aunque el tipo sea `String`, y la app falla después. Vale también para las listas: `"types": null` dejaría en `null` un `List<Types>` no nullable. Declararlos nullable obliga a manejar ese caso (`?.`, `?:`, `orEmpty()`), cosa que hace `toUi()` en el [paso 7](#paso-7-estado-de-la-ui).
 - La estructura anidada del JSON (`types[].type.name`) se reproduce con clases anidadas (`Types` → `Type`).
 - `@SerializedName` también sirve para claves que no son nombres válidos en Kotlin, como `official-artwork` (lleva guion).
 - `imageUrl` es una propiedad calculada, sin campo propio, así que Gson la ignora. Prefiere la ilustración oficial (unos 475 px) al sprite `front_default` (96 px), que se ve borroso a 200 dp.
@@ -290,23 +292,33 @@ suspend fun createItem(@Body item: Item): Response<Item>
 ```kotlin
 object RetrofitInstance {
     private const val BASE_URL = "https://pokeapi.co/api/v2/"
+    private const val CACHE_SIZE_BYTES = 10L * 1024 * 1024
 
-    val api: ApiService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)                                   // 1. URL base
-            .addConverterFactory(GsonConverterFactory.create())  // 2. JSON ⇄ Kotlin con Gson
-            .build()                                             // 3. Crea el cliente
-            .create(ApiService::class.java)                      // 4. Implementa la interfaz
+    fun createApi(cacheDir: File): ApiService {
+        val client = OkHttpClient.Builder()
+            .cache(Cache(File(cacheDir, "http"), CACHE_SIZE_BYTES))  // 1. Caché HTTP en disco
+            .addInterceptor(OfflineCacheInterceptor())               // 2. Caché sin conexión
+            .build()
+
+        return Retrofit.Builder()
+            .baseUrl(BASE_URL)                                   // 3. URL base
+            .client(client)                                      // 4. Cliente OkHttp propio
+            .addConverterFactory(GsonConverterFactory.create())  // 5. JSON ⇄ Kotlin con Gson
+            .build()                                             // 6. Crea el cliente Retrofit
+            .create(ApiService::class.java)                      // 7. Implementa la interfaz
     }
 }
 ```
 
-1. **`baseUrl`** debe terminar en `/`. Retrofit lanza `IllegalArgumentException` si no termina así. Las rutas de `@GET` **no** empiezan con `/`: una ruta con `/` inicial se resuelve desde la raíz del dominio y pierde el `api/v2/`.
-2. **`addConverterFactory`** registra Gson. Sin un converter, Retrofit no sabe crear un `Pokemon` a partir del JSON.
-3. **`build()`** crea el objeto `Retrofit`. Por defecto usa un `OkHttpClient` nuevo.
-4. **`create(ApiService::class.java)`** genera un objeto que implementa `ApiService`. Al llamar a `api.getPokemon("25")`, Retrofit arma la URL, hace la petición y convierte la respuesta.
+1. **`cache`**: OkHttp guarda las respuestas en disco y respeta sus cabeceras. PokéAPI envía `Cache-Control: max-age=86400`, así que un Pokémon ya visto se reutiliza durante un día sin descargarlo otra vez.
+2. **`OfflineCacheInterceptor`**: si falla la red, repite la petición con `only-if-cached` y acepta copias caducadas de hasta 30 días. Si no hay copia, relanza el `IOException` original, para que el usuario vea "Sin conexión".
+3. **`baseUrl`** debe terminar en `/`. Retrofit lanza `IllegalArgumentException` si no termina así. Las rutas de `@GET` **no** empiezan con `/`: una ruta con `/` inicial se resuelve desde la raíz del dominio y pierde el `api/v2/`.
+4. **`client`**: sin esta línea, Retrofit crea un `OkHttpClient` por defecto, sin caché.
+5. **`addConverterFactory`** registra Gson. Sin un converter, Retrofit no sabe crear un `Pokemon` a partir del JSON.
+6. **`build()`** crea el objeto `Retrofit`.
+7. **`create(ApiService::class.java)`** genera un objeto que implementa `ApiService`. Al llamar a `api.getPokemon("25")`, Retrofit arma la URL, hace la petición y convierte la respuesta.
 
-Se usa un `object` (singleton) con `by lazy` por dos razones: crear el cliente es costoso, y así se hace **una sola vez** y solo cuando se usa por primera vez.
+Crear el cliente es costoso, así que la app debe hacerlo **una sola vez**. `createApi` recibe la carpeta de caché, que solo se conoce con un `Context`, así que no puede ser un `val` de un `object`. La llama `AppContainer` una vez, de forma perezosa (`by lazy`), y guarda el resultado (ver [paso 10](#paso-10-application-y-mainactivity)).
 
 #### 5.3. Qué pasa en una llamada
 
@@ -353,11 +365,15 @@ Tres reglas que conviene respetar al replicarlo:
       .build()
   ```
 
-- **R8 en release.** Gson usa reflexión para leer los nombres de los campos. Si R8 llega a ofuscar el paquete `model`, el JSON deja de mapearse y los campos quedan en `null`. En ese caso, añade a `app/src/main/keepRules/rules.keep`:
+#### 5.6. R8 en release
 
-  ```
-  -keep class com.example.mypokemon.model.** { *; }
-  ```
+Gson crea los DTOs y rellena sus campos por reflexión. Si R8 renombra los campos o borra el constructor vacío del paquete `model`, el JSON deja de mapearse y los campos quedan en `null`. Por eso `app/src/main/keepRules/rules.keep` incluye:
+
+```
+-keep class com.example.mypokemon.model.** { *; }
+```
+
+Hoy `packageScope` (en `app/build.gradle.kts`) limita R8 a `androidx`, `kotlin` y `kotlinx`, así que el código de la app no se optimiza. La regla protege los DTOs si ese alcance se amplía.
 
 ### Paso 6. Repositorio
 
@@ -427,7 +443,7 @@ fun UiText.asString(): String = when (this) {
 }
 ```
 
-Todos los textos (botón, errores, título, tipos) están en `res/values/strings.xml`. Para traducir la app basta con añadir `res/values-en/strings.xml`.
+Todos los textos (botón, errores, título, tipos) están en `res/values/strings.xml`, en español, que es el idioma por defecto. `res/values-en/strings.xml` tiene la traducción al inglés: Android la elige sola si el dispositivo está en inglés. Para otro idioma basta con añadir otra carpeta (`values-pt`, `values-fr`…). `app_name` está marcado con `translatable="false"` porque es un nombre propio.
 
 **`viewmodel/PokemonUi.kt`: el Pokémon listo para mostrar.** El DTO `Pokemon` tiene campos nullable y unidades de PokéAPI. `toUi()` lo convierte en un modelo que la View pinta tal cual:
 
@@ -436,14 +452,15 @@ data class PokemonUi(
     val title: UiText,          // "#25 - Pikachu" o "Pokémon desconocido"
     val imageUrl: String?,      // artwork oficial o, si falta, el sprite
     val types: List<PokemonTypeUi>,
-    val weight: String,         // "6,0 kg" o "—"
-    val height: String          // "0,4 m" o "—"
+    val weight: UiText,         // R.string.weight_value con 6.0, o "—"
+    val height: UiText          // R.string.height_value con 0.4, o "—"
 )
 
 data class PokemonTypeUi(val key: String, val label: UiText)  // "electric", "Eléctrico"
 ```
 
-- `formatTenths` divide por 10 (PokéAPI usa hectogramos y decímetros) y usa el separador decimal del idioma (`6,0 kg` en español). Si falta un dato devuelve `—`.
+- `formatTenths` divide por 10 (PokéAPI usa hectogramos y decímetros) y devuelve el recurso `%1$.1f kg` con ese número. Si falta un dato devuelve `—`.
+- **¿Por qué `UiText` y no un `String` ya formateado?** El separador decimal depende del idioma (`6,0 kg` en español, `6.0 kg` en inglés). Android lo aplica al resolver el recurso en la View, con el idioma vigente. Si el ViewModel guardara el texto ya formateado, sobreviviría a un cambio de idioma con el separador antiguo.
 - `formatTitle` maneja la falta de número o de nombre.
 - `typeUi` traduce el tipo con su recurso (`R.string.type_electric`). Un tipo desconocido queda capitalizado. `key` es el nombre en inglés; la View lo usa para elegir el color.
 
@@ -451,7 +468,7 @@ data class PokemonTypeUi(val key: String, val label: UiText)  // "electric", "El
 
 ```kotlin
 sealed class PokemonUiState {
-    object Loading : PokemonUiState()
+    data class Loading(val previous: PokemonUi? = null) : PokemonUiState()
     data class Success(val pokemon: PokemonUi) : PokemonUiState()
     data class Error(val message: UiText) : PokemonUiState()
 }
@@ -459,29 +476,40 @@ sealed class PokemonUiState {
 
 Al ser `sealed`, un `when (uiState)` sin los tres casos no compila. Así ningún estado queda sin manejar.
 
+`Loading.previous` es el Pokémon que se mostraba antes de pedir otro. La View lo mantiene atenuado bajo el spinner, así la pantalla no salta en cada búsqueda. En la primera carga, o después de un error, es `null`.
+
 ### Paso 8. ViewModel
 
 `viewmodel/PokemonViewModel.kt` guarda el estado y contiene la lógica:
 
 ```kotlin
 class PokemonViewModel(
-    private val repository: PokemonRepository
+    private val repository: PokemonRepository,
+    private val savedStateHandle: SavedStateHandle,
+    private val random: Random = Random.Default
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow<PokemonUiState>(PokemonUiState.Loading)
+    private val _uiState = MutableStateFlow<PokemonUiState>(PokemonUiState.Loading())
     val uiState: StateFlow<PokemonUiState> = _uiState.asStateFlow()
 
     private var loadJob: Job? = null
 
-    init { getRandomPokemon() }
+    init { loadPokemon(savedStateHandle[KEY_LAST_ID] ?: randomId()) }
 
-    fun getRandomPokemon() {
+    fun getRandomPokemon() { loadPokemon(randomId()) }
+
+    private fun randomId(): Int = random.nextInt(1, 1026)
+
+    private fun loadPokemon(id: Int) {
         if (loadJob?.isActive == true) return
 
+        val previous = (_uiState.value as? PokemonUiState.Success)?.pokemon
+
         loadJob = viewModelScope.launch {
-            _uiState.value = PokemonUiState.Loading
+            _uiState.value = PokemonUiState.Loading(previous)
             _uiState.value = try {
-                val randomId = Random.nextInt(1, 1026).toString()
-                PokemonUiState.Success(repository.getPokemon(randomId).toUi())
+                val pokemon = repository.getPokemon(id.toString())
+                savedStateHandle[KEY_LAST_ID] = id
+                PokemonUiState.Success(pokemon.toUi())
             } catch (e: PokemonException) {
                 PokemonUiState.Error(e.toMessage())
             }
@@ -495,10 +523,15 @@ class PokemonViewModel(
     }
 
     companion object {
+        private const val KEY_LAST_ID = "last_pokemon_id"
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = this[APPLICATION_KEY] as PokemonApplication
-                PokemonViewModel(application.container.pokemonRepository)
+                PokemonViewModel(
+                    repository = application.container.pokemonRepository,
+                    savedStateHandle = createSavedStateHandle()
+                )
             }
         }
     }
@@ -507,10 +540,13 @@ class PokemonViewModel(
 
 - **`StateFlow`**: el estado se guarda en un `MutableStateFlow` privado y se expone como `StateFlow` de solo lectura. Así solo el ViewModel lo cambia, y el ViewModel no depende de Compose: en los tests basta con leer `uiState.value`.
 - **`loadJob`**: guarda la petición en curso. Si llega otra llamada antes de que termine, se ignora. La UI además desactiva el botón mientras carga.
+- **`random`**: también se inyecta. La app usa `Random.Default`; un test pasa `Random(42)` y sabe de antemano qué IDs se pedirán, porque dos `Random` con la misma semilla dan la misma secuencia.
+- **`previous`**: antes de cargar, guarda el Pokémon que se está mostrando y lo pasa a `Loading`, para que la View lo mantenga en pantalla.
+- **`SavedStateHandle`**: el `ViewModel` sobrevive a una rotación, pero no a que Android cierre la app en segundo plano para liberar memoria. `SavedStateHandle` sí sobrevive: guarda el ID del último Pokémon cargado y, al volver, `init` pide ese mismo en lugar de uno aleatorio. Solo se guarda un ID que cargó bien. Sirve para datos pequeños como un ID, no para el Pokémon completo.
 - `viewModelScope.launch` lanza una corrutina que se cancela sola si el ViewModel se destruye. Aquí se llama a la función `suspend` del repositorio.
 - **`toUi()`**: convierte el DTO en un `PokemonUi` listo para mostrar. La View nunca ve el `Pokemon` de Gson.
 - **Un solo `catch`**: el repositorio solo lanza `PokemonException`, y `toMessage()` elige el recurso de `strings.xml` para cada tipo. Al ser `sealed`, el `when` no compila si se añade un tipo nuevo sin mensaje. El ViewModel no importa nada de Retrofit (ver [5.4](#54-tipos-de-error-y-dónde-se-manejan)).
-- **`Factory`**: Android crea los ViewModel con un constructor sin parámetros. Como este recibe un repositorio, la `Factory` le indica cómo construirlo. No crea dependencias: las pide al `AppContainer` de la app (`APPLICATION_KEY` da acceso a la `Application`).
+- **`Factory`**: Android crea los ViewModel con un constructor sin parámetros. Como este recibe un repositorio, la `Factory` le indica cómo construirlo. No crea dependencias: las pide al `AppContainer` de la app (`APPLICATION_KEY` da acceso a la `Application`). `createSavedStateHandle()` le da el `SavedStateHandle` que conserva Android. En los tests se le pasa un `SavedStateHandle()` vacío.
 
 ### Paso 9. Interfaz con Compose
 
@@ -539,7 +575,13 @@ fun PokemonScreen(
 
 `collectAsStateWithLifecycle()` (de `lifecycle-runtime-compose`) recompone la UI cada vez que cambia el estado, y deja de recolectar cuando la app pasa a segundo plano.
 
-**`ui/screen/PokemonStateLayout.kt`**: layout común. Resuelve el `when (uiState)` (spinner, mensaje de error) y pinta el botón, que se desactiva mientras el estado es `Loading`. Cada pantalla solo aporta cómo se ve el estado `Success`:
+**`ui/screen/PokemonStateLayout.kt`**: layout común. Resuelve el `when (uiState)` y pinta el botón, que se desactiva mientras el estado es `Loading`:
+
+- **Carga** sin Pokémon previo: solo el spinner. Con Pokémon previo: el contenido anterior atenuado (`alpha(0.4f)`) y el spinner encima. Carga y éxito usan el mismo contenedor, así la pantalla no cambia de tamaño al terminar.
+- **Error**: el mensaje en rojo, con `liveRegion` para que los lectores de pantalla lo anuncien en cuanto aparece.
+- La columna tiene `verticalScroll`, para que en pantallas bajas (teléfono en horizontal) el botón siga siendo alcanzable.
+
+Cada pantalla solo aporta cómo se ve un Pokémon cargado:
 
 ```kotlin
 PokemonStateLayout(uiState = uiState, onRandomClick = onRandomClick, modifier = modifier) { pokemon ->
@@ -553,8 +595,10 @@ PokemonStateLayout(uiState = uiState, onRandomClick = onRandomClick, modifier = 
 **Componentes (`ui/components/`)**:
 
 - `PokemonImage`: `SubcomposeAsyncImage` de Coil, con spinner mientras carga y el logo como imagen de error. Recibe `pokemon.imageUrl`: la ilustración oficial o, si no existe, el sprite.
-- `PokemonDetails`: recibe un `PokemonUi` y muestra el título, los tipos, y el peso y la altura. No formatea nada: los textos llegan listos y solo los resuelve con `asString()` y `stringResource()`.
+- `PokemonDetails`: recibe un `PokemonUi` y muestra el título, los tipos, y el peso y la altura. No formatea nada: solo resuelve los textos con `asString()` y `stringResource()`. El título lleva `semantics { heading() }`, para que los lectores de pantalla puedan saltar directo a él.
 - `PokemonTypePill`: recibe un `PokemonTypeUi`. Muestra el nombre ya traducido y elige el color con `PokemonTypeColors` según `key`. El texto es blanco o negro según el fondo: `readableTextColor` elige el que tenga más contraste con la fórmula de WCAG, así todos los tipos superan 4.5:1.
+
+El logo de la barra superior tiene `contentDescription = null`: es decorativo, porque el título de al lado ya dice el nombre de la app.
 
 Como las pantallas no conocen el ViewModel, sus `@Preview` usan datos fijos (`previewPokemon`, un `Pokemon` convertido con `toUi()`) y se ven sin red.
 
@@ -567,12 +611,14 @@ interface AppContainer {
     val pokemonRepository: PokemonRepository
 }
 
-class DefaultAppContainer : AppContainer {
+class DefaultAppContainer(private val context: Context) : AppContainer {
     override val pokemonRepository: PokemonRepository by lazy {
-        DefaultPokemonRepository(RetrofitInstance.api)
+        DefaultPokemonRepository(RetrofitInstance.createApi(context.cacheDir))
     }
 }
 ```
+
+Recibe el `Context` de la aplicación para ubicar la caché HTTP en la carpeta de caché de la app, que Android vacía si se queda sin espacio. `by lazy` garantiza que el cliente se crea una sola vez.
 
 **`PokemonApplication.kt`**: crea el contenedor una sola vez al arrancar la app. Se registra en el manifest con `android:name` (ver [paso 3](#paso-3-manifest-permiso-de-internet-y-application)):
 
@@ -583,12 +629,12 @@ class PokemonApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        container = DefaultAppContainer()
+        container = DefaultAppContainer(this)
     }
 }
 ```
 
-Si mañana se añade una caché o una base de datos, solo cambia `DefaultAppContainer`. El ViewModel y su `Factory` no se tocan.
+Si mañana se añade una base de datos, solo cambia `DefaultAppContainer`. El ViewModel y su `Factory` no se tocan. Así se añadió la caché HTTP: solo cambiaron `RetrofitInstance` y el contenedor.
 
 **`MainActivity.kt`**:
 
@@ -610,16 +656,17 @@ class MainActivity : ComponentActivity() {
 
 ## Testear con piezas falsas
 
-Gracias a la inyección por constructor, cada capa se prueba sin red y con una pieza falsa de la capa de abajo: el repositorio con un `ApiService` falso, y el ViewModel con un repositorio falso. Los tests están en `app/src/test/java/com/example/mypokemon/` y se ejecutan con `./gradlew testDebugUnitTest`.
+Gracias a la inyección por constructor, cada capa se prueba sin red y con una pieza falsa de la capa de abajo: el repositorio con un `ApiService` falso, y el ViewModel con un repositorio falso. Los tests unitarios están en `app/src/test/java/com/example/mypokemon/` y se ejecutan con `./gradlew testDebugUnitTest`, sin emulador. Los de UI se explican en [Tests de UI](#tests-de-ui).
 
 | Archivo | Qué prueba |
 |---|---|
 | `FakeApiService.kt` | No es un test: es un `ApiService` falso para los tests del repositorio. Cada test decide qué responde y puede revisar los IDs pedidos. |
 | `FakePokemonRepository.kt` | No es un test: es un `PokemonRepository` falso para los tests del ViewModel. Devuelve un `Pokemon` o lanza una `PokemonException`. |
 | `MainDispatcherRule.kt` | Regla de JUnit que reemplaza `Dispatchers.Main`, que no existe fuera de Android y que `viewModelScope` necesita. |
+| `data/remote/OfflineCacheInterceptorTest.kt` | Con red pasa la respuesta; sin red usa la caché (`only-if-cached`, hasta 30 días); sin red ni copia relanza el `IOException` original. Usa un `Interceptor.Chain` falso. |
 | `data/repository/PokemonRepositoryTest.kt` | Respuesta correcta, y la traducción de cada fallo: 404 y 200 sin cuerpo a `Server`, error de red a `Network`, JSON ilegible a `Unknown`. |
-| `viewmodel/PokemonViewModelTest.kt` | Paso de `Loading` a `Success`, ID entre 1 y 1025, mensaje para cada `PokemonException`, peticiones simultáneas ignoradas y reintento. |
-| `viewmodel/PokemonUiTest.kt` | Conversión a `PokemonUi`: decimales según el idioma, datos faltantes, título y traducción de tipos. |
+| `viewmodel/PokemonViewModelTest.kt` | Paso de `Loading` a `Success`, ID entre 1 y 1025, IDs exactos con un `Random` con semilla, Pokémon anterior durante la carga, ID recuperado de `SavedStateHandle`, mensaje para cada `PokemonException`, peticiones simultáneas ignoradas y reintento. |
+| `viewmodel/PokemonUiTest.kt` | Conversión a `PokemonUi`: peso y altura divididos por 10, datos faltantes, nulls explícitos de Gson, título y traducción de tipos. |
 | `ui/components/PokemonTypePillContrastTest.kt` | Todos los tipos cumplen el contraste mínimo de WCAG AA. |
 
 Los tests comparan IDs de recurso (`R.string.error_network`), no textos. Por eso no se rompen si cambia la redacción de un mensaje.
@@ -660,15 +707,44 @@ val mainDispatcherRule = MainDispatcherRule()
 
 @Test
 fun `empieza en Loading y pasa a Success con el Pokémon listo para mostrar`() = runTest {
-    val viewModel = PokemonViewModel(FakePokemonRepository { pikachu })
+    val viewModel = PokemonViewModel(FakePokemonRepository { pikachu }, SavedStateHandle())
 
-    assertEquals(PokemonUiState.Loading, viewModel.uiState.value)
+    assertEquals(PokemonUiState.Loading(), viewModel.uiState.value)
     advanceUntilIdle()
     assertEquals(PokemonUiState.Success(pikachu.toUi()), viewModel.uiState.value)
 }
 ```
 
 Para escribir estos tests hace falta la dependencia `kotlinx-coroutines-test` (`runTest`, `advanceUntilIdle`). `toResponseBody()` viene de `okhttp3.ResponseBody.Companion`; OkHttp ya llega como dependencia de Retrofit.
+
+### Tests de UI
+
+`app/src/androidTest/java/com/example/mypokemon/ui/screen/PokemonScreensTest.kt` prueba las pantallas en un emulador o dispositivo con `./gradlew connectedDebugAndroidTest`. Como las pantallas no conocen el ViewModel, cada test les pasa un estado fijo y comprueba qué muestran, sin red ni repositorio:
+
+| Estado | Qué comprueba |
+|---|---|
+| `Success` | Título, tipo traducido, peso y botón activo. El título es un encabezado (`isHeading()`). |
+| `Loading()` | Solo el spinner, sin Pokémon, y el botón desactivado. |
+| `Loading(previous)` | El Pokémon anterior sigue visible, con spinner, y el botón desactivado. |
+| `Error` | Mensaje visible, anunciado con `liveRegion`, y el botón llama a `onRandomClick`. |
+| Pantalla mediana | Muestra el Pokémon y el botón. |
+
+```kotlin
+@get:Rule
+val composeRule = createComposeRule()
+
+@Test
+fun primera_carga_muestra_solo_spinner_y_desactiva_el_boton() {
+    composeRule.setContent {
+        MyPokémonTheme { PokemonCompactScreen(uiState = PokemonUiState.Loading(), onRandomClick = {}) }
+    }
+
+    composeRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate)).assertIsDisplayed()
+    composeRule.onNodeWithText(context.getString(R.string.random_button)).assertIsNotEnabled()
+}
+```
+
+Los textos se leen con `context.getString(...)` en lugar de escribirlos a mano, así los tests pasan con el dispositivo en español o en inglés.
 
 ---
 
@@ -681,5 +757,5 @@ En PowerShell usa `.\gradlew.bat` en lugar de `./gradlew`.
 | `./gradlew assembleDebug` | Compila el APK de debug. |
 | `./gradlew installDebug` | Instala la app en el emulador o dispositivo conectado. |
 | `./gradlew testDebugUnitTest` | Ejecuta los tests unitarios. |
-| `./gradlew connectedDebugAndroidTest` | Ejecuta los tests instrumentados (requiere dispositivo). |
+| `./gradlew connectedDebugAndroidTest` | Ejecuta los tests de UI (requiere emulador o dispositivo). |
 | `./gradlew lint` | Ejecuta el análisis de Android Lint. |

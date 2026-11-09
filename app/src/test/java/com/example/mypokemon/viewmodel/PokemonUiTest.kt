@@ -5,29 +5,29 @@ import com.example.mypokemon.model.Pokemon
 import com.example.mypokemon.model.Type
 import com.example.mypokemon.model.Types
 import com.example.mypokemon.ui.utils.UiText
+import com.google.gson.Gson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.util.Locale
 
 class PokemonUiTest {
 
-    private val spanish = Locale.forLanguageTag("es-CL")
-
     @Test
-    fun `divide por 10 y usa coma decimal en español`() {
-        assertEquals("6,0 kg", formatTenths(60, "kg", spanish))
-        assertEquals("0,4 m", formatTenths(4, "m", spanish))
-    }
-
-    @Test
-    fun `usa punto decimal en inglés`() {
-        assertEquals("6.0 kg", formatTenths(60, "kg", Locale.US))
+    fun `divide por 10 y deja el formato al recurso`() {
+        // El separador decimal lo pone Android al resolver el recurso, según el idioma.
+        assertEquals(
+            UiText.Resource(R.string.weight_value, listOf(6.0)),
+            formatTenths(60, R.string.weight_value)
+        )
+        assertEquals(
+            UiText.Resource(R.string.height_value, listOf(0.4)),
+            formatTenths(4, R.string.height_value)
+        )
     }
 
     @Test
     fun `muestra un guion si falta el valor`() {
-        assertEquals("—", formatTenths(null, "kg", spanish))
+        assertEquals(UiText.Plain("—"), formatTenths(null, R.string.weight_value))
     }
 
     @Test
@@ -81,11 +81,25 @@ class PokemonUiTest {
             )
         )
 
-        val ui = pokemon.toUi(spanish)
+        val ui = pokemon.toUi()
 
         assertEquals(listOf("electric", "normal"), ui.types.map { it.key })
-        assertEquals("6,0 kg", ui.weight)
-        assertEquals("0,4 m", ui.height)
+        assertEquals(UiText.Resource(R.string.weight_value, listOf(6.0)), ui.weight)
+        assertEquals(UiText.Resource(R.string.height_value, listOf(0.4)), ui.height)
         assertNull(ui.imageUrl)
+    }
+
+    @Test
+    fun `no falla si Gson recibe nulls explícitos en el JSON`() {
+        // Gson ignora la nulabilidad de Kotlin: asigna `null` aunque haya default.
+        val json = """{"id": 25, "name": null, "sprites": null, "types": null}"""
+        val pokemon = Gson().fromJson(json, Pokemon::class.java)
+
+        val ui = pokemon.toUi()
+
+        assertEquals(emptyList<PokemonTypeUi>(), ui.types)
+        assertEquals(UiText.Resource(R.string.pokemon_title_unknown, listOf(25)), ui.title)
+        assertNull(ui.imageUrl)
+        assertEquals(UiText.Plain("—"), ui.weight)
     }
 }

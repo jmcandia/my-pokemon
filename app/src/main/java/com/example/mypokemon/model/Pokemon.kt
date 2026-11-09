@@ -16,16 +16,18 @@ data class Pokemon(
     val id: Int? = null,
     @SerializedName("name")
     val name: String? = null,
-    // En decímetros. La UI lo divide por 10 para mostrar metros.
+    // En decímetros. `toUi()` lo divide por 10 para mostrar metros.
     @SerializedName("height")
     val height: Int? = null,
-    // En hectogramos. La UI lo divide por 10 para mostrar kilogramos.
+    // En hectogramos. `toUi()` lo divide por 10 para mostrar kilogramos.
     @SerializedName("weight")
     val weight: Int? = null,
     @SerializedName("sprites")
     val sprites: Sprites? = Sprites(),
+    // Nullable como el resto: con `"types": null` en el JSON, Gson asignaría `null`
+    // aunque el tipo dijera lo contrario, y la app fallaría al recorrer la lista.
     @SerializedName("types")
-    val types: ArrayList<Types> = arrayListOf()
+    val types: List<Types>? = null
 ) {
     /**
      * URL de la imagen a mostrar: la ilustración oficial si existe y, si no, el

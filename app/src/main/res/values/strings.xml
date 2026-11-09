@@ -1,8 +1,9 @@
 <resources>
-    <string name="app_name">My Pokémon</string>
+    <!-- Idioma por defecto: español. Las traducciones están en values-<idioma>/. -->
+    <!-- Nombre propio de la app: no se traduce. -->
+    <string name="app_name" translatable="false">My Pokémon</string>
 
     <!-- Pantalla principal -->
-    <string name="logo_description">Logo</string>
     <string name="random_button">¡Buscar Pokémon aleatorio!</string>
     <string name="image_unavailable">Imagen no disponible</string>
 
@@ -12,6 +13,9 @@
     <string name="pokemon_unknown">Pokémon desconocido</string>
     <string name="pokemon_weight">Peso: %1$s</string>
     <string name="pokemon_height">Altura: %1$s</string>
+    <!-- El separador decimal lo pone Android según el idioma (6,0 en español). -->
+    <string name="weight_value">%1$.1f kg</string>
+    <string name="height_value">%1$.1f m</string>
 
     <!-- Errores -->
     <string name="error_network">Sin conexión. Revisa tu red e inténtalo de nuevo.</string>
