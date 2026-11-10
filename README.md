@@ -794,3 +794,13 @@ En PowerShell usa `.\gradlew.bat` en lugar de `./gradlew`.
 | `./gradlew testDebugUnitTest` | Ejecuta los tests unitarios. |
 | `./gradlew connectedDebugAndroidTest` | Ejecuta los tests de UI (requiere emulador o dispositivo). |
 | `./gradlew lint` | Ejecuta el análisis de Android Lint. |
+
+---
+
+## Autor
+
+**José Miguel Candia** — [GitHub](https://github.com/jmcandia)
+
+## Licencia
+
+Este proyecto se distribuye bajo la licencia MIT. Consulta el archivo [`LICENSE`](LICENSE) para más detalles.
